@@ -90,5 +90,12 @@
             android:layout_marginTop="16dp"
             android:text="@string/auto_brightness_label" />
 
+        <Button
+            android:id="@+id/btnGrantWriteSettings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/grant_write_settings" />
+
     </LinearLayout>
 </ScrollView>

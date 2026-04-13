@@ -6,9 +6,18 @@
     android:orientation="vertical"
     android:padding="24dp">
 
-    <Button
-        android:id="@+id/btnOpenSettings"
+    <EditText
+        android:id="@+id/et_input"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/open_settings" />
+        android:hint="请输入内容" />
+    <TextView
+        android:id="@+id/tv_text"
+        android:layout_width="match_parent"
+        android:layout_height="500dp"/>
+    <Button
+        android:id="@+id/btn_send"
+        android:text="发送"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
 </LinearLayout>
