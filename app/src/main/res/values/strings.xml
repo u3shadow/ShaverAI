@@ -1,10 +1,15 @@
-<resources>
+﻿<resources>
     <string name="app_name">Shaver</string>
+
+    <string name="chat_input_hint">请输入内容</string>
+    <string name="send">发送</string>
+
     <string name="open_settings">打开设置</string>
     <string name="settings_title">设置</string>
     <string name="save">保存</string>
     <string name="save_success">设置已保存到数据库</string>
     <string name="settings_auto_applied">已自动应用已保存的设置</string>
+
     <string name="wifi_id_label">当前连接 Wi-Fi ID</string>
     <string name="wifi_id_hint">未获取到 Wi-Fi，请手动输入</string>
     <string name="read_current_wifi">读取当前 Wi-Fi</string>
@@ -12,6 +17,7 @@
     <string name="wifi_permission_denied">未授予 Wi-Fi 读取权限</string>
     <string name="location_service_required">请先打开系统定位开关</string>
     <string name="write_settings_not_granted">未授予修改系统设置权限，亮度设置可能仅在应用内生效</string>
+
     <string name="notification_volume_label">通知音量</string>
     <string name="ringtone_volume_label">铃声音量</string>
     <string name="brightness_label">屏幕亮度</string>
