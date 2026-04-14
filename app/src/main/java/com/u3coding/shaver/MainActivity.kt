@@ -52,7 +52,7 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            viewModel.sendMessage(input)
+            viewModel.sendStreamMessage(input)
             et.text?.clear()
             input = ""
         }

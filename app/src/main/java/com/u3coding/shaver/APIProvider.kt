@@ -10,7 +10,8 @@ object ApiProvider {
     private const val BASE_URL = "https://api.deepseek.com/"
 
     private val logging = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        // BODY may buffer streaming responses and hurt real-time rendering.
+        level = HttpLoggingInterceptor.Level.BASIC
     }
 
     private val okHttpClient = OkHttpClient.Builder()

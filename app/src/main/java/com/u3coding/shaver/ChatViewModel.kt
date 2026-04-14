@@ -3,7 +3,6 @@
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,7 +41,7 @@ class ChatViewModel : ViewModel() {
                 _messages.value = _messages.value + "用户：$input"
                 currentJob = viewModelScope.launch {
                     try {
-                        val result = repo.streamChat(input)
+                        val result = repo.noStreamChat(input)
                         _messages.value = _messages.value + "AI：$result"
                     } catch (e: Exception) {
                         _messages.value = _messages.value + "AI：请求失败：${e.message}"
@@ -51,7 +50,55 @@ class ChatViewModel : ViewModel() {
             }
         }
     }
+    fun addUserMessage(input: String) {
+        val list = _messages.value.toMutableList()
+        list.add("用户：$input")
+        _messages.value = list
+    }
+    fun updateLastAiMessage(text: String) {
+        val list = _messages.value.toMutableList()
 
+        if (list.lastOrNull()?.startsWith("AI") == true) {
+            list[list.lastIndex] = "AI：$text"
+        } else {
+            list.add("AI：$text")
+        }
+
+        _messages.value = list
+    }
+    fun sendStreamMessage(input: String) {
+        val history = listOf(
+            ChatRequest.Message(role = "user", content = input)
+        )
+
+        addUserMessage(input)
+        when {
+            input.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) -> {
+                ChangeBlueTooth().open()
+                updateLastMessage("AI: Bluetooth is turned on.")
+            }
+
+            input.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true) -> {
+                ChangeBlueTooth().close()
+                updateLastMessage("AI: Bluetooth is turned off.")
+            }
+
+            else -> {
+                currentJob = viewModelScope.launch {
+                    var currentText = ""
+
+                    repo.streamChat(history).collect { token ->
+                        currentText += token
+                        updateLastAiMessage(currentText)
+                    }
+                }
+            }
+        }
+    }
+
+    fun stopGenerating() {
+        currentJob?.cancel()
+    }
     private fun updateLastMessage(text: String) {
         val list = _messages.value.toMutableList()
         if (list.lastOrNull()?.startsWith("AI:") == true) {
