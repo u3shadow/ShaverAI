@@ -2,6 +2,7 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -10,10 +11,11 @@ import kotlinx.coroutines.launch
 
 class ChatViewModel : ViewModel() {
 
+    private lateinit var currentJob: Job
     private val _messages = MutableStateFlow<List<String>>(emptyList())
     val messages: StateFlow<List<String>> = _messages.asStateFlow()
 
-    private val repo = ChatRepo()
+    private val repo = ChatRepo(ApiProvider.api)
 
     fun requiresBluetoothPermission(input: String): Boolean {
         return input.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) ||
@@ -25,9 +27,6 @@ class ChatViewModel : ViewModel() {
         if (message.isBlank()) {
             return
         }
-
-        _messages.value = _messages.value + "User: $message"
-
         when {
             message.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) -> {
                 ChangeBlueTooth().open()
@@ -40,13 +39,13 @@ class ChatViewModel : ViewModel() {
             }
 
             else -> {
-                viewModelScope.launch {
-                    val tokens = repo.streamChat(message)
-                    var current = ""
-                    tokens.forEach { token ->
-                        delay(300)
-                        current += token
-                        updateLastMessage("AI: $current")
+                _messages.value = _messages.value + "用户：$input"
+                currentJob = viewModelScope.launch {
+                    try {
+                        val result = repo.streamChat(input)
+                        _messages.value = _messages.value + "AI：$result"
+                    } catch (e: Exception) {
+                        _messages.value = _messages.value + "AI：请求失败：${e.message}"
                     }
                 }
             }
