@@ -1,6 +1,5 @@
 package com.u3coding.shaver
 
-import android.R
 import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.Headers
@@ -26,13 +25,15 @@ interface API {
 }*/
 data class ChatRequest(
     val model: String,
-    val messages: List<Message>,
+    val messages: List<ChatMessage>,
     val stream: Boolean = false
 ) {
-    data class Message(
-        val id: String, val role: String, val content: String, var wifiName: String? = null, val time: Long = System.currentTimeMillis()
-    )
+
 }
+data class ChatMessage(
+    val role: String,
+    val content: String
+)
 /*
 {
     "id": "94eef12a-6993-4fc2-8d6b-99cb7012d05a",
@@ -116,5 +117,3 @@ data class StreamChatResponse(
         val reasoning_content: String? = null
     )
 }
-data class UiMessage(val id: String, val role: String, val content: String, val wifiName: String? = null, val status: String = "done",val time: Long = System.currentTimeMillis())
-

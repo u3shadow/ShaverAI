@@ -8,9 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ChatViewModel: ViewModel() {
+class ChatViewModel : ViewModel() {
 
-    private lateinit var currentJob: Job
+    private var currentJob: Job? = null
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
 
@@ -21,65 +21,38 @@ class ChatViewModel: ViewModel() {
             input.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true)
     }
 
-    fun addUserMessage(input: ChatRequest.Message) {
-        val list = _messages.value.toMutableList()
-        list.add(
-            UiMessage(
-                id = input.id,
-                role = input.role,
-                content = input.content,
-                wifiName = input.wifiName,
-                time = input.time
-            )
-        )
-        _messages.value = list
-    }
-    fun updateLastAiMessage(text: String) {
-        val list = _messages.value.toMutableList()
-
-        if (list.lastOrNull()?.role == "assistant") {
-            val old = list.last()
-            list[list.lastIndex] = old.copy(content = text, status = "generating")
-        } else {
-            list.add(
-                UiMessage(
-                    id = System.currentTimeMillis().toString(),
-                    role = "assistant",
-                    content = text,
-                    status = "generating"
-                )
-            )
+    fun sendStreamMessage(input: String) {
+        val message = input.trim()
+        if (message.isBlank()) {
+            return
         }
 
-        _messages.value = list
-    }
-    fun sendStreamMessage(input: String) {
-       val message =  ChatRequest.Message(id =  System.currentTimeMillis().toString(),role = "user", content = input)
-        //获取当前wifissid
-      //  message.wifiName =  wifiProvider.getCurrentWifiSSID()
-        val history = listOf(
-            message
-        )
-
         addUserMessage(message)
+
         when {
-            input.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) -> {
+            message.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) -> {
                 ChangeBlueTooth().open()
-                updateLastMessage("AI: Bluetooth is turned on.")
+                addAssistantDoneMessage("Bluetooth is turned on.")
             }
 
-            input.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true) -> {
+            message.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true) -> {
                 ChangeBlueTooth().close()
-                updateLastMessage("AI: Bluetooth is turned off.")
+                addAssistantDoneMessage("Bluetooth is turned off.")
             }
 
             else -> {
+                val history = buildRequestMessages(_messages.value)
+                currentJob?.cancel()
                 currentJob = viewModelScope.launch {
                     var currentText = ""
-
-                    repo.streamChat(history).collect { token ->
-                        currentText += token
-                        updateLastAiMessage(currentText)
+                    try {
+                        repo.streamChat(history).collect { token ->
+                            currentText += token
+                            updateLastAiMessage(currentText)
+                        }
+                        markLastAiDone()
+                    } catch (e: Exception) {
+                        markLastAiError("请求失败：${e.message ?: "unknown error"}")
                     }
                 }
             }
@@ -88,27 +61,100 @@ class ChatViewModel: ViewModel() {
 
     fun stopGenerating() {
         currentJob?.cancel()
+        markLastAiCancelled()
     }
-    private fun updateLastMessage(text: String) {
+
+    private fun addUserMessage(input: String) {
         val list = _messages.value.toMutableList()
-        if (list.lastOrNull()?.role == "assistant") {
-            list[list.lastIndex] = UiMessage(
-                id = list.last().id,
-                role = "assistant",
-                content = text,
-                wifiName = list.last().wifiName,
-                time = list.last().time,
-                status = "done"
-            )
-        } else {
-            list.add(UiMessage(
+        list.add(
+            UiMessage(
                 id = System.currentTimeMillis().toString(),
-                role = "user",
+                role = Role.USER,
+                content = input,
+                status = MessageStatus.DONE
+            )
+        )
+        _messages.value = list
+    }
+
+    private fun addAssistantDoneMessage(text: String) {
+        val list = _messages.value.toMutableList()
+        list.add(
+            UiMessage(
+                id = System.currentTimeMillis().toString(),
+                role = Role.ASSISTANT,
                 content = text,
-                status = "done"
-            ))
+                status = MessageStatus.DONE
+            )
+        )
+        _messages.value = list
+    }
+
+    private fun updateLastAiMessage(text: String) {
+        val list = _messages.value.toMutableList()
+        if (list.lastOrNull()?.role == Role.ASSISTANT) {
+            val old = list.last()
+            list[list.lastIndex] = old.copy(content = text, status = MessageStatus.GENERATING)
+        } else {
+            list.add(
+                UiMessage(
+                    id = System.currentTimeMillis().toString(),
+                    role = Role.ASSISTANT,
+                    content = text,
+                    status = MessageStatus.GENERATING
+                )
+            )
         }
         _messages.value = list
+    }
+
+    private fun markLastAiDone() {
+        val list = _messages.value.toMutableList()
+        val index = list.indexOfLast { it.role == Role.ASSISTANT }
+        if (index >= 0) {
+            list[index] = list[index].copy(status = MessageStatus.DONE)
+            _messages.value = list
+        }
+    }
+
+    private fun markLastAiError(text: String) {
+        val list = _messages.value.toMutableList()
+        val index = list.indexOfLast { it.role == Role.ASSISTANT }
+        if (index >= 0) {
+            list[index] = list[index].copy(content = text, status = MessageStatus.ERROR)
+        } else {
+            list.add(
+                UiMessage(
+                    id = System.currentTimeMillis().toString(),
+                    role = Role.ASSISTANT,
+                    content = text,
+                    status = MessageStatus.ERROR
+                )
+            )
+        }
+        _messages.value = list
+    }
+
+    private fun markLastAiCancelled() {
+        val list = _messages.value.toMutableList()
+        val index = list.indexOfLast { it.role == Role.ASSISTANT && it.status == MessageStatus.GENERATING }
+        if (index >= 0) {
+            list[index] = list[index].copy(status = MessageStatus.CANCELLED)
+            _messages.value = list
+        }
+    }
+
+    private fun buildRequestMessages(uiMessages: List<UiMessage>): List<ChatMessage> {
+        return uiMessages.map {
+            ChatMessage(
+                role = when (it.role) {
+                    Role.USER -> "user"
+                    Role.ASSISTANT -> "assistant"
+                    Role.SYSTEM -> "system"
+                },
+                content = it.content
+            )
+        }
     }
 
     companion object {

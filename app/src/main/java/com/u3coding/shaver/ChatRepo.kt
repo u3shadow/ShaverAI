@@ -11,7 +11,7 @@ import java.io.InputStreamReader
 
 class ChatRepo (val api: API){
     val gson = Gson()
-    fun streamChat(messages: List<ChatRequest.Message>): Flow<String> = flow {
+    fun streamChat(messages: List<ChatMessage>): Flow<String> = flow {
         val request = ChatRequest(
             model = "deepseek-chat",
             messages = messages,
