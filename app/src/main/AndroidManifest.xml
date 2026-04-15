@@ -21,7 +21,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Shaver" >
-        <activity android:name="com.u3coding.shaver.MainActivity"
+        <activity android:name="com.u3coding.shaver.ui.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN">
