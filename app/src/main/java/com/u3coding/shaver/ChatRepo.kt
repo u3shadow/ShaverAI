@@ -11,18 +11,6 @@ import java.io.InputStreamReader
 
 class ChatRepo (val api: API){
     val gson = Gson()
-    suspend fun noStreamChat(input: String): String {
-        val request = ChatRequest(
-            model = "deepseek-chat",
-            messages = listOf(
-                ChatRequest.Message(role = "system", content = "You are a helpful assistant.")
-                ,ChatRequest.Message(role = "user", content = input)
-            ),
-            stream = false
-        )
-        val response = api.chat(request)
-        return response.choices.firstOrNull()?.message?.content.orEmpty()
-    }
     fun streamChat(messages: List<ChatRequest.Message>): Flow<String> = flow {
         val request = ChatRequest(
             model = "deepseek-chat",

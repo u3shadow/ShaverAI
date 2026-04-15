@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ChatViewModel : ViewModel() {
+class ChatViewModel: ViewModel() {
 
     private lateinit var currentJob: Job
     private val _messages = MutableStateFlow<List<String>>(emptyList())
@@ -21,38 +21,9 @@ class ChatViewModel : ViewModel() {
             input.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true)
     }
 
-    fun sendMessage(input: String) {
-        val message = input.trim()
-        if (message.isBlank()) {
-            return
-        }
-        when {
-            message.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) -> {
-                ChangeBlueTooth().open()
-                updateLastMessage("AI: Bluetooth is turned on.")
-            }
-
-            message.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true) -> {
-                ChangeBlueTooth().close()
-                updateLastMessage("AI: Bluetooth is turned off.")
-            }
-
-            else -> {
-                _messages.value = _messages.value + "用户：$input"
-                currentJob = viewModelScope.launch {
-                    try {
-                        val result = repo.noStreamChat(input)
-                        _messages.value = _messages.value + "AI：$result"
-                    } catch (e: Exception) {
-                        _messages.value = _messages.value + "AI：请求失败：${e.message}"
-                    }
-                }
-            }
-        }
-    }
-    fun addUserMessage(input: String) {
+    fun addUserMessage(input: ChatRequest.Message) {
         val list = _messages.value.toMutableList()
-        list.add("用户：$input")
+        list.add("用户：${input.content}")
         _messages.value = list
     }
     fun updateLastAiMessage(text: String) {
@@ -67,11 +38,14 @@ class ChatViewModel : ViewModel() {
         _messages.value = list
     }
     fun sendStreamMessage(input: String) {
+       val message =  ChatRequest.Message(id = "1",role = "user", content = input)
+        //获取当前wifissid
+      //  message.wifiName =  wifiProvider.getCurrentWifiSSID()
         val history = listOf(
-            ChatRequest.Message(role = "user", content = input)
+            message
         )
 
-        addUserMessage(input)
+        addUserMessage(message)
         when {
             input.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) -> {
                 ChangeBlueTooth().open()

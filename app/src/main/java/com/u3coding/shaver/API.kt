@@ -29,8 +29,7 @@ data class ChatRequest(
     val stream: Boolean = false
 ) {
     data class Message(
-        val role: String,
-        val content: String
+        val id: String, val role: String, val content: String, var wifiName: String? = null, val time: Long = System.currentTimeMillis()
     )
 }
 /*

@@ -98,7 +98,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (input.isNotBlank() && viewModel.requiresBluetoothPermission(input)) {
-            viewModel.sendMessage(input)
+            viewModel.sendStreamMessage(input)
         }
     }
 
