@@ -11,8 +11,8 @@ import kotlinx.coroutines.launch
 class ChatViewModel: ViewModel() {
 
     private lateinit var currentJob: Job
-    private val _messages = MutableStateFlow<List<String>>(emptyList())
-    val messages: StateFlow<List<String>> = _messages.asStateFlow()
+    private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
+    val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
 
     private val repo = ChatRepo(ApiProvider.api)
 
@@ -23,22 +23,38 @@ class ChatViewModel: ViewModel() {
 
     fun addUserMessage(input: ChatRequest.Message) {
         val list = _messages.value.toMutableList()
-        list.add("用户：${input.content}")
+        list.add(
+            UiMessage(
+                id = input.id,
+                role = input.role,
+                content = input.content,
+                wifiName = input.wifiName,
+                time = input.time
+            )
+        )
         _messages.value = list
     }
     fun updateLastAiMessage(text: String) {
         val list = _messages.value.toMutableList()
 
-        if (list.lastOrNull()?.startsWith("AI") == true) {
-            list[list.lastIndex] = "AI：$text"
+        if (list.lastOrNull()?.role == "assistant") {
+            val old = list.last()
+            list[list.lastIndex] = old.copy(content = text, status = "generating")
         } else {
-            list.add("AI：$text")
+            list.add(
+                UiMessage(
+                    id = System.currentTimeMillis().toString(),
+                    role = "assistant",
+                    content = text,
+                    status = "generating"
+                )
+            )
         }
 
         _messages.value = list
     }
     fun sendStreamMessage(input: String) {
-       val message =  ChatRequest.Message(id = "1",role = "user", content = input)
+       val message =  ChatRequest.Message(id =  System.currentTimeMillis().toString(),role = "user", content = input)
         //获取当前wifissid
       //  message.wifiName =  wifiProvider.getCurrentWifiSSID()
         val history = listOf(
@@ -75,10 +91,22 @@ class ChatViewModel: ViewModel() {
     }
     private fun updateLastMessage(text: String) {
         val list = _messages.value.toMutableList()
-        if (list.lastOrNull()?.startsWith("AI:") == true) {
-            list[list.lastIndex] = text
+        if (list.lastOrNull()?.role == "assistant") {
+            list[list.lastIndex] = UiMessage(
+                id = list.last().id,
+                role = "assistant",
+                content = text,
+                wifiName = list.last().wifiName,
+                time = list.last().time,
+                status = "done"
+            )
         } else {
-            list.add(text)
+            list.add(UiMessage(
+                id = System.currentTimeMillis().toString(),
+                role = "user",
+                content = text,
+                status = "done"
+            ))
         }
         _messages.value = list
     }

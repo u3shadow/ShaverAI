@@ -33,7 +33,8 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.messages.collect { list ->
-                    text.text = list.joinToString("\n")
+                    //把list中的content用换行符连接起来显示在text上
+                    text.text = list.joinToString("\n") { "${it.role}: ${it.content}" }
                 }
             }
         }
