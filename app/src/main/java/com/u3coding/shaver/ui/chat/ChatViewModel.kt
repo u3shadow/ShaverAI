@@ -6,6 +6,8 @@ import com.u3coding.shaver.data.remote.ApiProvider
 import com.u3coding.shaver.data.remote.ChatMessage
 import com.u3coding.shaver.data.repository.ChatRepo
 import com.u3coding.shaver.device.ChangeBlueTooth
+import com.u3coding.shaver.action.Action
+import com.u3coding.shaver.action.ActionExecutor
 import com.u3coding.shaver.model.MessageStatus
 import com.u3coding.shaver.model.Role
 import com.u3coding.shaver.model.UiMessage
@@ -15,22 +17,43 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ChatViewModel : ViewModel() {
+class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
 
     private var currentJob: Job? = null
     private var currentRoundWifiSsid: String? = null
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
-
+    private var lastSSID = ""
     private val repo = ChatRepo(ApiProvider.api)
-
+    private val actionMap = mapOf(
+        "chinanet-xxx_5G_nor_5G" to Action(
+            triger = "chinanet-xxx_5G_nor_5G",
+            operation = "set_volume",
+            params = mapOf("value" to 0)
+        ),
+        "chinanet-xxx_5G-2" to Action(
+            triger = "chinanet-xxx_5G-2",
+            operation = "set_brightness",
+            params = mapOf("value" to 100)
+        )
+    )
     fun requiresBluetoothPermission(input: String): Boolean {
         return input.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) ||
             input.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true)
     }
 
+    fun onWifiChange(ssid:String){
+        val action = actionMap[ssid]
+        if(action != null){
+            lastSSID = ssid
+            executor.execute(action)
+        }
+    }
+
+
     fun sendStreamMessage(input: String, wifiSsid: String? = null) {
         val message = input.trim()
+        onWifiChange(wifiSsid?:"")
         if (message.isBlank()) {
             return
         }
