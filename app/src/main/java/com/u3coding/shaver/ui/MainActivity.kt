@@ -14,6 +14,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.u3coding.shaver.R
+import com.u3coding.shaver.action.Action
 import com.u3coding.shaver.action.ActionExecutor
 import com.u3coding.shaver.device.WifiProvider
 import com.u3coding.shaver.model.Role
@@ -25,6 +26,8 @@ import kotlinx.coroutines.launch
 class MainActivity : AppCompatActivity() {
 
 
+    private lateinit var executor: ActionExecutor
+    private  var lastSSID: String = ""
     private lateinit var viewModel: ChatViewModel
     private lateinit var wifiProvider: WifiProvider
     private lateinit var permissionHelper: PermissionRequestHelper
@@ -34,7 +37,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.main_activity)
-        val executor = ActionExecutor(applicationContext)
+        executor = ActionExecutor(applicationContext)
         val factory = ChatViewModelFactory(executor)
         viewModel = ViewModelProvider(this, factory)[ChatViewModel::class.java]
         wifiProvider = WifiProvider(this)
@@ -92,9 +95,20 @@ class MainActivity : AppCompatActivity() {
         }
 
         val ssid = wifiProvider.getCurrentWifiSsid()
+        checkAndApplyWifiScene(ssid?:"")
+
         viewModel.sendStreamMessage(message, ssid)
         inputEditText.text?.clear()
         input = ""
+    }
+
+    fun checkAndApplyWifiScene(ssid:String){
+        if (ssid == lastSSID) return
+        val action =viewModel.actionMap[ssid]
+        if(action != null){
+            lastSSID = ssid
+            executor.execute(action)
+        }
     }
     override fun onRequestPermissionsResult(
         requestCode: Int,

@@ -25,7 +25,7 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
     private var lastSSID = ""
     private val repo = ChatRepo(ApiProvider.api)
-    private val actionMap = mapOf(
+    val actionMap = mapOf(
         "chinanet-xxx_5G_nor_5G" to Action(
             triger = "chinanet-xxx_5G_nor_5G",
             operation = "set_volume",
@@ -42,18 +42,12 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
             input.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true)
     }
 
-    fun onWifiChange(ssid:String){
-        val action = actionMap[ssid]
-        if(action != null){
-            lastSSID = ssid
-            executor.execute(action)
-        }
-    }
+
 
 
     fun sendStreamMessage(input: String, wifiSsid: String? = null) {
         val message = input.trim()
-        onWifiChange(wifiSsid?:"")
+
         if (message.isBlank()) {
             return
         }
