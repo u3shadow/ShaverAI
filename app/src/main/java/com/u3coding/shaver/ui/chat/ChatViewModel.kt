@@ -8,6 +8,7 @@ import com.u3coding.shaver.data.repository.ChatRepo
 import com.u3coding.shaver.device.ChangeBlueTooth
 import com.u3coding.shaver.action.Action
 import com.u3coding.shaver.action.ActionExecutor
+import com.u3coding.shaver.action.PromptBuilder
 import com.u3coding.shaver.model.MessageStatus
 import com.u3coding.shaver.model.Role
 import com.u3coding.shaver.model.UiMessage
@@ -95,7 +96,13 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
             content = "Current Wi-Fi SSID: $wifiSsid",
             status = MessageStatus.DONE
         )
-        return listOf(wifiContextMessage) + uiMessages
+        val promptMessage = UiMessage(
+            id = "prompt-${System.currentTimeMillis()}",
+            role = Role.SYSTEM,
+            content = PromptBuilder().buildPrompt(uiMessages.filter { it.role == Role.USER }.lastOrNull()?.content ?: ""),
+            status = MessageStatus.DONE
+        )
+        return listOf(wifiContextMessage,promptMessage) + uiMessages.takeLast(5)
     }
 
     fun stopGenerating() {
