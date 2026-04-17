@@ -90,19 +90,15 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         if (wifiSsid.isNullOrBlank()) {
             return uiMessages
         }
-        val wifiContextMessage = UiMessage(
-            id = "wifi-${System.currentTimeMillis()}",
-            role = Role.SYSTEM,
-            content = "Current Wi-Fi SSID: $wifiSsid",
-            status = MessageStatus.DONE
-        )
-        val promptMessage = UiMessage(
-            id = "prompt-${System.currentTimeMillis()}",
-            role = Role.SYSTEM,
-            content = PromptBuilder().buildPrompt(uiMessages.filter { it.role == Role.USER }.lastOrNull()?.content ?: ""),
-            status = MessageStatus.DONE
-        )
-        return listOf(wifiContextMessage,promptMessage) + uiMessages.takeLast(5)
+        return PromptBuilder().build(uiMessages.last().content, wifiSsid).let { systemPrompt ->
+            listOf(UiMessage(
+                id = "system-${System.currentTimeMillis()}",
+                role = Role.SYSTEM,
+                content = systemPrompt,
+                wifiSsid = wifiSsid,
+                status = MessageStatus.DONE
+            )) + uiMessages
+        }
     }
 
     fun stopGenerating() {
