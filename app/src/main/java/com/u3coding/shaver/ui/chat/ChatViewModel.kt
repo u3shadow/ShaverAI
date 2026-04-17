@@ -2,13 +2,17 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
 import com.u3coding.shaver.data.remote.ApiProvider
 import com.u3coding.shaver.data.remote.ChatMessage
 import com.u3coding.shaver.data.repository.ChatRepo
 import com.u3coding.shaver.device.ChangeBlueTooth
 import com.u3coding.shaver.action.Action
+import com.u3coding.shaver.action.ActionDTO
 import com.u3coding.shaver.action.ActionExecutor
+import com.u3coding.shaver.action.ActionParser
 import com.u3coding.shaver.action.PromptBuilder
+import com.u3coding.shaver.action.RuleRepo
 import com.u3coding.shaver.model.MessageStatus
 import com.u3coding.shaver.model.Role
 import com.u3coding.shaver.model.UiMessage
@@ -21,6 +25,7 @@ import kotlinx.coroutines.launch
 class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
 
     private var currentJob: Job? = null
+    private val gson = Gson()
     private var currentRoundWifiSsid: String? = null
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
@@ -28,12 +33,12 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
     private val repo = ChatRepo(ApiProvider.api)
     val actionMap = mapOf(
         "chinanet-xxx_5G_nor_5G" to Action(
-            triger = "chinanet-xxx_5G_nor_5G",
+            trigger = "chinanet-xxx_5G_nor_5G",
             operation = "set_volume",
             params = mapOf("value" to 0)
         ),
         "chinanet-xxx_5G-2" to Action(
-            triger = "chinanet-xxx_5G-2",
+            trigger = "chinanet-xxx_5G-2",
             operation = "set_brightness",
             params = mapOf("value" to 100)
         )
@@ -78,6 +83,13 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                             updateLastAiMessage(currentText)
                         }
                         markLastAiDone()
+                        // 2. 在这里解析完整 JSON
+                        val result = ActionParser().parseActionDTO(currentText)
+                        if (!ActionParser().ActionValidator(result)) {
+                            markLastAiError("解析结果不合法")
+                        }else{
+                            handleParsedActionResult(result)
+                        }
                     } catch (e: Exception) {
                         markLastAiError("请求失败：${e.message ?: "unknown error"}")
                     }
@@ -85,7 +97,16 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
             }
         }
     }
-
+    private fun handleParsedActionResult(result: ActionDTO) {
+        if (result.operation == null) {
+            // 没有解析出操作，直接返回
+            return
+        }
+        val action = result.toAction()
+        RuleRepo.addRule(action)
+        // 这里直接执行动作，实际应用中可能需要用户确认
+        executor.execute(action)
+    }
     private fun buildRequestUiMessages(uiMessages: List<UiMessage>, wifiSsid: String?): List<UiMessage> {
         if (wifiSsid.isNullOrBlank()) {
             return uiMessages
