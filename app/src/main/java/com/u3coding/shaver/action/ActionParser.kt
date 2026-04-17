@@ -13,7 +13,7 @@ class ActionParser {
     }
     fun ActionValidator(actionDTO: ActionDTO): Boolean {
          //验证ActionDTO对象是否合法,1.验证字段是否为空，2.检查operation是否在OperationList中，3.检查params是否符合要求,如果是蓝牙操作，params应该为空，如果是音量或亮度操作，params应该包含一个数值参数"value"
-        if (actionDTO.triger == null || actionDTO.operation == null) {
+        if (actionDTO.trigger == null || actionDTO.operation == null) {
             return false
         }
         if (!OperationList.isValidOperation(actionDTO.operation)) {

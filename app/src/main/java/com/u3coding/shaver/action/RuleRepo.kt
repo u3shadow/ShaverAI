@@ -6,10 +6,17 @@ class RuleRepo {
 companion object {
      private val rulesMap = mutableMapOf<String, MutableList<Action>>()
     fun addRule(action: Action) {
+
         if (!rulesMap.containsKey(action.trigger)) {
             rulesMap[action.trigger] = mutableListOf()
         }
-        rulesMap.get(action.trigger)?.add(action)
+        //如果已经有相同的operation的action存在，覆盖它
+        val existingActionIndex = rulesMap[action.trigger]?.indexOfFirst { it.operation == action.operation }
+        if (existingActionIndex != null && existingActionIndex >= 0) {
+            rulesMap[action.trigger]?.set(existingActionIndex, action)
+        } else {
+            rulesMap.get(action.trigger)?.add(action)
+        }
     }
 
     fun getRules(action: Action): List<Action> {

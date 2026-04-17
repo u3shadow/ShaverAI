@@ -16,7 +16,7 @@ class ActionExecutor(
             "set_volume" -> setVolume(action)
             "set_brightness" -> setBrightness(action)
             "open_bluetooth" -> openBluetooth()
-            "close_bluetooth" -> openBluetooth()
+            "close_bluetooth" -> closeBluetooth()
         }
     }
 
@@ -27,6 +27,9 @@ class ActionExecutor(
 
     private fun openBluetooth() {
         ChangeBlueTooth().open()
+    }
+    private fun closeBluetooth() {
+        ChangeBlueTooth().close()
     }
 
     private fun setBrightness(action: Action) {
