@@ -3,13 +3,16 @@ package com.u3coding.shaver.action
 import com.u3coding.shaver.model.Role
 import com.u3coding.shaver.model.UiMessage
 
+
 class PromptBuilder {
 
     fun build(
         input: String,
-        currentWifi: String?
+        currentWifi: String?,
+        messages: List<UiMessage>
     ): String {
         val wifiText = currentWifi?.takeIf { it.isNotBlank() } ?: "unknown"
+        val historyText = buildRecentHistory(messages)
 
         return """
 你是一个 Android 端自动化规则解析器。
@@ -25,6 +28,12 @@ class PromptBuilder {
 
 当前 Wi-Fi：
 $wifiText
+
+最近聊天记录：
+$historyText
+
+当前用户输入：
+$input
 
 请返回 JSON，格式如下：
 {
@@ -53,7 +62,9 @@ $wifiText
 
 示例1：
 当前 Wi-Fi：公司WiFi
-用户输入：公司WiFi 下把音量调成 0
+最近聊天记录：
+无
+当前用户输入：公司WiFi 下把音量调成 0
 返回：
 {
   "trigger": "公司WiFi",
@@ -65,7 +76,10 @@ $wifiText
 
 示例2：
 当前 Wi-Fi：公司WiFi
-用户输入：以后在这里把音量调成 0
+最近聊天记录：
+用户：我到公司了
+AI：好的
+当前用户输入：以后在这里把音量调成 0
 返回：
 {
   "trigger": "公司WiFi",
@@ -77,7 +91,10 @@ $wifiText
 
 示例3：
 当前 Wi-Fi：家里WiFi
-用户输入：回家后打开蓝牙
+最近聊天记录：
+用户：我回家了
+AI：好的
+当前用户输入：回家后打开蓝牙
 返回：
 {
   "trigger": "家里WiFi",
@@ -89,7 +106,9 @@ $wifiText
 
 示例4：
 当前 Wi-Fi：unknown
-用户输入：以后在这里把亮度调成 80
+最近聊天记录：
+无
+当前用户输入：以后在这里把亮度调成 80
 返回：
 {
   "trigger": null,
@@ -101,7 +120,9 @@ $wifiText
 
 示例5：
 当前 Wi-Fi：公司WiFi
-用户输入：打开蓝牙
+最近聊天记录：
+无
+当前用户输入：打开蓝牙
 返回：
 {
   "trigger": null,
@@ -111,8 +132,26 @@ $wifiText
   }
 }
 
-现在请解析下面这条用户输入，并且只返回 JSON：
-用户输入：$input
+现在请解析，并且只返回 JSON：
 """.trimIndent()
+    }
+
+    private fun buildRecentHistory(messages: List<UiMessage>): String {
+        val recentMessages = messages
+            .filter { it.role == Role.USER || it.role == Role.ASSISTANT }
+            .takeLast(4)
+
+        if (recentMessages.isEmpty()) {
+            return "无"
+        }
+
+        return recentMessages.joinToString("\n") { message ->
+            val roleText = when (message.role) {
+                Role.USER -> "用户"
+                Role.ASSISTANT -> "AI"
+                Role.SYSTEM -> "系统"
+            }
+            "$roleText：${message.content}"
+        }
     }
 }

@@ -90,7 +90,7 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         if (wifiSsid.isNullOrBlank()) {
             return uiMessages
         }
-        return PromptBuilder().build(uiMessages.last().content, wifiSsid).let { systemPrompt ->
+        return PromptBuilder().build(uiMessages.last().content, wifiSsid,messages.value).let { systemPrompt ->
             listOf(UiMessage(
                 id = "system-${System.currentTimeMillis()}",
                 role = Role.SYSTEM,
