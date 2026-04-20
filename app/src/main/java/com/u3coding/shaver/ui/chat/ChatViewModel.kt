@@ -15,7 +15,9 @@ import com.u3coding.shaver.action.InputClassifier
 import com.u3coding.shaver.action.InputType
 import com.u3coding.shaver.action.PromptBuilder
 import com.u3coding.shaver.action.RuleRepo
+import com.u3coding.shaver.model.CommandChatContextManager
 import com.u3coding.shaver.model.MessageStatus
+import com.u3coding.shaver.model.NormalChatContextManager
 import com.u3coding.shaver.model.Role
 import com.u3coding.shaver.model.UiMessage
 import kotlinx.coroutines.Job
@@ -28,11 +30,11 @@ import kotlinx.coroutines.launch
 class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
 
     private var currentJob: Job? = null
-    private val gson = Gson()
     private var currentRoundWifiSsid: String? = null
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
+    private val normalContextManager = NormalChatContextManager()
+    private val commandContextManager = CommandChatContextManager()
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
-    private var lastSSID = ""
     private val repo = ChatRepo(ApiProvider.api)
     val actionMap = mapOf(
         "chinanet-xxx_5G_nor_5G" to Action(
@@ -56,30 +58,15 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
 
     fun sendStreamMessage(input: String, wifiSsid: String? = null) {
         val message = input.trim()
-
         if (message.isBlank()) {
             return
         }
-
         currentRoundWifiSsid = wifiSsid
         addUserMessage(message, wifiSsid)
         var history = emptyList<ChatMessage>()
         val inputType = InputClassifier.classify(input)
-        if (inputType == InputType.CommandChat) {
-            history = buildRequestMessages(buildRequestUiMessages(_messages.value, wifiSsid))
-        }else{
-            //使用Input和wifiSsid构造一个临时的UiMessage，放在历史记录的最后面，来构造请求上下文
-            val uiMessage = UiMessage(
-                id = System.currentTimeMillis().toString(),
-                role = Role.USER,
-                content = input,
-                wifiSsid = wifiSsid,
-                status = MessageStatus.DONE
-            )
-            history = buildRequestMessages(listOf(uiMessage))
-        }
-
-                currentJob?.cancel()
+        history = getHistory(inputType, input, wifiSsid, history)
+        currentJob?.cancel()
                 currentJob = viewModelScope.launch {
                     var currentText = ""
                     try {
@@ -102,6 +89,46 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                     }
                 }
         }
+
+    private fun getHistory(
+        inputType: InputType,
+        input: String,
+        wifiSsid: String?,
+        history: List<ChatMessage>
+    ): List<ChatMessage> {
+        var history1 = history
+        if (inputType == InputType.CommandChat) {
+            commandContextManager.addMessage(
+                UiMessage(
+                    id = System.currentTimeMillis().toString(),
+                    role = Role.USER,
+                    content = input,
+                    wifiSsid = wifiSsid,
+                    status = MessageStatus.DONE
+                )
+            )
+            history1 = buildRequestMessages(
+                buildRequestUiMessages(
+                    commandContextManager.getLastMessages(),
+                    wifiSsid
+                )
+            )
+        } else {
+            //使用Input和wifiSsid构造一个临时的UiMessage，放在历史记录的最后面，来构造请求上下文
+            normalContextManager.addMessage(
+                UiMessage(
+                    id = System.currentTimeMillis().toString(),
+                    role = Role.USER,
+                    content = input,
+                    wifiSsid = wifiSsid,
+                    status = MessageStatus.DONE
+                )
+            )
+            history1 = buildRequestMessages(normalContextManager.getLastMessages())
+        }
+        return history1
+    }
+
     private fun handleParsedActionResult(result: ActionDTO) {
         if (result.operation == null) {
             // 没有解析出操作，直接返回
