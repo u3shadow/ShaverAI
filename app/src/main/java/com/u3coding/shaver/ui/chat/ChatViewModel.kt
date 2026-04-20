@@ -15,6 +15,7 @@ import com.u3coding.shaver.action.InputClassifier
 import com.u3coding.shaver.action.InputType
 import com.u3coding.shaver.action.PromptBuilder
 import com.u3coding.shaver.action.RuleRepo
+import com.u3coding.shaver.action.RuleRunResult
 import com.u3coding.shaver.model.CommandChatContextManager
 import com.u3coding.shaver.model.MessageStatus
 import com.u3coding.shaver.model.NormalChatContextManager
@@ -57,38 +58,62 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
 
 
     fun sendStreamMessage(input: String, wifiSsid: String? = null) {
+        handleUserInput(input, wifiSsid)
+    }
+
+    fun handleUserInput(input: String, wifiSsid: String?) {
+        when (InputClassifier.classify(input)) {
+            InputType.NormalChat -> handleNormalChatInput(input, wifiSsid)
+            InputType.CommandChat -> handleCommandInput(input, wifiSsid)
+        }
+    }
+
+    private fun handleNormalChatInput(input: String, wifiSsid: String?) {
         val message = input.trim()
         if (message.isBlank()) {
             return
         }
         currentRoundWifiSsid = wifiSsid
         addUserMessage(message, wifiSsid)
-        var history = emptyList<ChatMessage>()
-        val inputType = InputClassifier.classify(input)
-        history = getHistory(inputType, input, wifiSsid, history)
+        val history = getHistory(InputType.NormalChat, message, wifiSsid, emptyList())
+        runStreamRequest(InputType.NormalChat, history)
+    }
+
+    private fun handleCommandInput(input: String, wifiSsid: String?) {
+        val message = input.trim()
+        if (message.isBlank()) {
+            return
+        }
+        currentRoundWifiSsid = wifiSsid
+        addUserMessage(message, wifiSsid)
+        val history = getHistory(InputType.CommandChat, message, wifiSsid, emptyList())
+        runStreamRequest(InputType.CommandChat, history)
+    }
+
+    private fun runStreamRequest(inputType: InputType, history: List<ChatMessage>) {
         currentJob?.cancel()
-                currentJob = viewModelScope.launch {
-                    var currentText = ""
-                    try {
-                        repo.streamChat(history).collect { token ->
-                            currentText += token
-                            updateLastAiMessage(currentText)
-                        }
-                        markLastAiDone()
-                        // 2. 在这里解析完整 JSON
-                        if (inputType == InputType.CommandChat) {
-                            val result = ActionParser().parseActionDTO(currentText)
-                            if (!ActionParser().ActionValidator(result)) {
-                                markLastAiError("解析结果不合法")
-                            } else {
-                                handleParsedActionResult(result)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        markLastAiError("请求失败：${e.message ?: "unknown error"}")
+        currentJob = viewModelScope.launch {
+            var currentText = ""
+            try {
+                repo.streamChat(history).collect { token ->
+                    currentText += token
+                    updateLastAiMessage(currentText)
+                }
+                markLastAiDone()
+                appendAssistantToContext(inputType, currentText, currentRoundWifiSsid)
+                if (inputType == InputType.CommandChat) {
+                    val result = ActionParser().parseActionDTO(currentText)
+                    if (!ActionParser().ActionValidator(result)) {
+                        markLastAiError("解析结果不合法")
+                    } else {
+                        handleParsedActionResult(result)
                     }
                 }
+            } catch (e: Exception) {
+                markLastAiError("请求失败：${e.message ?: "unknown error"}")
+            }
         }
+    }
 
     private fun getHistory(
         inputType: InputType,
@@ -139,6 +164,27 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         // 这里直接执行动作，实际应用中可能需要用户确认
         executor.execute(action)
     }
+
+    fun onRuleRunResult(result: RuleRunResult) {
+        val content = when (result) {
+            is RuleRunResult.Success -> "执行成功"
+            is RuleRunResult.NoRule -> "未找到对应规则"
+            is RuleRunResult.SkippedDuplicate -> "已经执行过相同规则，跳过"
+            is RuleRunResult.Failed -> "执行失败，原因：${result.reason}"
+        }
+        val list = _messages.value.toMutableList()
+        list.add(
+            UiMessage(
+                id = "rule-${System.currentTimeMillis()}",
+                role = Role.SYSTEM,
+                content = content,
+                wifiSsid = currentRoundWifiSsid,
+                status = MessageStatus.DONE
+            )
+        )
+        _messages.value = list
+    }
+
     private fun buildRequestUiMessages(uiMessages: List<UiMessage>, wifiSsid: String?): List<UiMessage> {
         if (wifiSsid.isNullOrBlank()) {
             return uiMessages
@@ -253,6 +299,24 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                 },
                 content = it.content
             )
+        }
+    }
+
+    private fun appendAssistantToContext(
+        inputType: InputType,
+        text: String,
+        wifiSsid: String?
+    ) {
+        val msg = UiMessage(
+            id = System.currentTimeMillis().toString(),
+            role = Role.ASSISTANT,
+            content = text,
+            wifiSsid = wifiSsid,
+            status = MessageStatus.DONE
+        )
+        when (inputType) {
+            InputType.NormalChat -> normalContextManager.addMessage(msg)
+            InputType.CommandChat -> commandContextManager.addMessage(msg)
         }
     }
 

@@ -14,10 +14,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.u3coding.shaver.R
-import com.u3coding.shaver.action.Action
 import com.u3coding.shaver.action.ActionExecutor
 import com.u3coding.shaver.action.RuleEngine
-import com.u3coding.shaver.action.RuleRunResult
 import com.u3coding.shaver.device.WifiProvider
 import com.u3coding.shaver.model.Role
 import com.u3coding.shaver.ui.chat.ChatViewModel
@@ -29,7 +27,6 @@ class MainActivity : AppCompatActivity() {
 
 
     private lateinit var executor: ActionExecutor
-    private  var lastSSID: String = ""
     private lateinit var viewModel: ChatViewModel
     private lateinit var wifiProvider: WifiProvider
     private lateinit var permissionHelper: PermissionRequestHelper
@@ -75,6 +72,8 @@ class MainActivity : AppCompatActivity() {
         btn.setOnClickListener {
             trySendMessage()
         }
+
+        onWifiMaybeChanged()
     }
 
     private fun trySendMessage() {
@@ -99,31 +98,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         val ssid = wifiProvider.getCurrentWifiSsid()
-        checkAndApplyWifiScene(ssid?:"")
-
+        onWifiMaybeChanged()
         viewModel.sendStreamMessage(message, ssid)
         inputEditText.text?.clear()
         input = ""
     }
 
-    fun checkAndApplyWifiScene(ssid:String){
-        val result =ruleEngine.run(ssid)
-        var resultString = ""
-        when(result){
-            is RuleRunResult.Success -> {
-              resultString = "执行成功"
-            }
-            is RuleRunResult.NoRule -> {
-                resultString = "未找到对应规则"
-            }
-             is RuleRunResult.SkippedDuplicate -> {
-                 resultString = "已经执行过相同规则，跳过"
-             }
-            is RuleRunResult.Failed -> {
-                resultString = "执行失败，原因：${result.reason}"
-             }
+    private fun onWifiMaybeChanged() {
+        if (!permissionHelper.hasWifiPermission()) {
+            return
         }
-        Toast.makeText(this, resultString, Toast.LENGTH_SHORT).show()
+        val ssid = wifiProvider.getCurrentWifiSsid() ?: return
+        val result = ruleEngine.run(ssid)
+        viewModel.onRuleRunResult(result)
     }
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -135,7 +122,10 @@ class MainActivity : AppCompatActivity() {
             requestCode = requestCode,
             grantResults = grantResults,
             onBluetoothGranted = { trySendMessage() },
-            onWifiGranted = { trySendMessage() },
+            onWifiGranted = {
+                onWifiMaybeChanged()
+                trySendMessage()
+            },
             onWifiDenied = {
                 Toast.makeText(this, getString(R.string.wifi_permission_denied), Toast.LENGTH_SHORT)
                     .show()
