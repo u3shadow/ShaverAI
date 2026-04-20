@@ -3,6 +3,9 @@
 
     <string name="chat_input_hint">请输入内容</string>
     <string name="send">发送</string>
+    <string name="current_wifi_unknown">当前 Wi-Fi: unknown</string>
+    <string name="current_wifi_format">当前 Wi-Fi: %1$s</string>
+    <string name="env_config_title">环境配置实时面板</string>
 
     <string name="open_settings">打开设置</string>
     <string name="settings_title">设置</string>
