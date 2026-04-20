@@ -14,7 +14,8 @@ class BrightnessTool(val context: Context) {
             return
         }
         val level = Math.max(1, Math.min(level, 100))
-        val brightness = max(1, min((255f * (level / 100f)).toInt(), 255))
+        // Android系统的亮度值范围是0-255，所以需要将百分比转换为0-255的范围
+        val brightness = (255f * (level / 100f)).toInt()
         Settings.System.putInt(
             context.getContentResolver(),
             Settings.System.SCREEN_BRIGHTNESS_MODE,

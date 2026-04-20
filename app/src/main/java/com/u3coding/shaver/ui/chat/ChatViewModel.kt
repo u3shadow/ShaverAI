@@ -11,6 +11,8 @@ import com.u3coding.shaver.action.Action
 import com.u3coding.shaver.action.ActionDTO
 import com.u3coding.shaver.action.ActionExecutor
 import com.u3coding.shaver.action.ActionParser
+import com.u3coding.shaver.action.InputClassifier
+import com.u3coding.shaver.action.InputType
 import com.u3coding.shaver.action.PromptBuilder
 import com.u3coding.shaver.action.RuleRepo
 import com.u3coding.shaver.model.MessageStatus
@@ -20,6 +22,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.launch
 
 class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
@@ -60,20 +63,22 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
 
         currentRoundWifiSsid = wifiSsid
         addUserMessage(message, wifiSsid)
+        var history = emptyList<ChatMessage>()
+        val inputType = InputClassifier.classify(input)
+        if (inputType == InputType.CommandChat) {
+            history = buildRequestMessages(buildRequestUiMessages(_messages.value, wifiSsid))
+        }else{
+            //使用Input和wifiSsid构造一个临时的UiMessage，放在历史记录的最后面，来构造请求上下文
+            val uiMessage = UiMessage(
+                id = System.currentTimeMillis().toString(),
+                role = Role.USER,
+                content = input,
+                wifiSsid = wifiSsid,
+                status = MessageStatus.DONE
+            )
+            history = buildRequestMessages(listOf(uiMessage))
+        }
 
-        when {
-            message.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) -> {
-                ChangeBlueTooth().open()
-                addAssistantDoneMessage("Bluetooth is turned on.", wifiSsid)
-            }
-
-            message.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true) -> {
-                ChangeBlueTooth().close()
-                addAssistantDoneMessage("Bluetooth is turned off.", wifiSsid)
-            }
-
-            else -> {
-                val history = buildRequestMessages(buildRequestUiMessages(_messages.value, wifiSsid))
                 currentJob?.cancel()
                 currentJob = viewModelScope.launch {
                     var currentText = ""
@@ -84,19 +89,19 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                         }
                         markLastAiDone()
                         // 2. 在这里解析完整 JSON
-                        val result = ActionParser().parseActionDTO(currentText)
-                        if (!ActionParser().ActionValidator(result)) {
-                            markLastAiError("解析结果不合法")
-                        }else{
-                            handleParsedActionResult(result)
+                        if (inputType == InputType.CommandChat) {
+                            val result = ActionParser().parseActionDTO(currentText)
+                            if (!ActionParser().ActionValidator(result)) {
+                                markLastAiError("解析结果不合法")
+                            } else {
+                                handleParsedActionResult(result)
+                            }
                         }
                     } catch (e: Exception) {
                         markLastAiError("请求失败：${e.message ?: "unknown error"}")
                     }
                 }
-            }
         }
-    }
     private fun handleParsedActionResult(result: ActionDTO) {
         if (result.operation == null) {
             // 没有解析出操作，直接返回

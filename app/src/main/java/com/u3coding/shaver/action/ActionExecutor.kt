@@ -5,6 +5,7 @@ import android.media.AudioManager
 import com.u3coding.shaver.device.BrightnessTool
 import com.u3coding.shaver.device.ChangeBlueTooth
 import com.u3coding.shaver.device.VolumeTool
+import java.lang.Float
 
 class ActionExecutor(
     context: Context
@@ -22,7 +23,7 @@ class ActionExecutor(
 
     private fun setVolume(action: Action) {
         val volumeTool = VolumeTool(appContext)
-        volumeTool.setVolume(action.params["value"] as? Int ?: return)
+        volumeTool.setVolume(Float(action.params["value"].toString()).toInt())
     }
 
     private fun openBluetooth() {
@@ -34,6 +35,6 @@ class ActionExecutor(
 
     private fun setBrightness(action: Action) {
         val brightnessTool = BrightnessTool(appContext)
-        brightnessTool.applyBrightness(action.params["value"] as? Int ?: return)
+        brightnessTool.applyBrightness(Float(action.params["value"].toString()).toInt() )
     }
 }
