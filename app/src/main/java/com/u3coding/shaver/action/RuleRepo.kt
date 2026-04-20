@@ -19,9 +19,9 @@ companion object {
         }
     }
 
-    fun getRules(action: Action): List<Action> {
-        if (rulesMap.containsKey(action.trigger)) {
-            return rulesMap[action.trigger]?.toList() ?: emptyList()
+    fun getRules(ssid: String): List<Action> {
+        if (rulesMap.containsKey(ssid)) {
+            return rulesMap[ssid]?.toList() ?: emptyList()
         } else {
             return emptyList()
         }

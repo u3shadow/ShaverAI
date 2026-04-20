@@ -16,6 +16,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.u3coding.shaver.R
 import com.u3coding.shaver.action.Action
 import com.u3coding.shaver.action.ActionExecutor
+import com.u3coding.shaver.action.RuleEngine
+import com.u3coding.shaver.action.RuleRunResult
 import com.u3coding.shaver.device.WifiProvider
 import com.u3coding.shaver.model.Role
 import com.u3coding.shaver.ui.chat.ChatViewModel
@@ -33,10 +35,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var permissionHelper: PermissionRequestHelper
     private lateinit var inputEditText: EditText
     private var input: String = ""
+    private lateinit var ruleEngine : RuleEngine
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.main_activity)
+        ruleEngine = RuleEngine(this)
         executor = ActionExecutor(applicationContext)
         val factory = ChatViewModelFactory(executor)
         viewModel = ViewModelProvider(this, factory)[ChatViewModel::class.java]
@@ -103,12 +107,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun checkAndApplyWifiScene(ssid:String){
-        if (ssid == lastSSID) return
-        val action =viewModel.actionMap[ssid]
-        if(action != null){
-            lastSSID = ssid
-            executor.execute(action)
+        val result =ruleEngine.run(ssid)
+        var resultString = ""
+        when(result){
+            is RuleRunResult.Success -> {
+              resultString = "执行成功"
+            }
+            is RuleRunResult.NoRule -> {
+                resultString = "未找到对应规则"
+            }
+             is RuleRunResult.SkippedDuplicate -> {
+                 resultString = "已经执行过相同规则，跳过"
+             }
+            is RuleRunResult.Failed -> {
+                resultString = "执行失败，原因：${result.reason}"
+             }
         }
+        Toast.makeText(this, resultString, Toast.LENGTH_SHORT).show()
     }
     override fun onRequestPermissionsResult(
         requestCode: Int,

@@ -10,6 +10,9 @@ class InputClassifier {
             ,"在xxWiFi下"
             ,"调成"
             ,"设置"
+            ,"音量"
+              ,"打开"
+          ,"关闭"
             ,"静音"
             ,"亮度")
         fun classify(input: String): InputType {
