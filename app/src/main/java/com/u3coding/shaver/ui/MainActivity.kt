@@ -78,10 +78,20 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.messages.collect { list ->
-                    chatAdapter.submitList(list)
-                    if (list.isNotEmpty()) {
-                        rvChat.scrollToPosition(list.lastIndex)
+                launch {
+                    viewModel.messages.collect { list ->
+                        chatAdapter.submitList(list)
+                        if (list.isNotEmpty()) {
+                            rvChat.scrollToPosition(list.lastIndex)
+                        }
+                    }
+                }
+                launch {
+                    viewModel.lastSuccessfulActions.collect { actions ->
+                        if (actions.isNotEmpty()) {
+                            applyActionsToEnvState(actions)
+                            renderEnvConfigList()
+                        }
                     }
                 }
             }
@@ -144,7 +154,7 @@ class MainActivity : AppCompatActivity() {
         when (result) {
             is RuleRunResult.Success -> {
                 envState["规则状态"] = "执行成功"
-                applyActionsToEnvState(result.action)
+                viewModel.onActionsExecuted(result.action)
             }
             is RuleRunResult.NoRule -> {
                 envState["规则状态"] = "未找到规则"

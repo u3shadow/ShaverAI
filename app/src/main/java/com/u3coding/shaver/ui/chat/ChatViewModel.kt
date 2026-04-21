@@ -33,9 +33,11 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
     private var currentJob: Job? = null
     private var currentRoundWifiSsid: String? = null
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
+    private val _lastSuccessfulActions = MutableStateFlow<List<Action>>(emptyList())
     private val normalContextManager = NormalChatContextManager()
     private val commandContextManager = CommandChatContextManager()
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
+    val lastSuccessfulActions: StateFlow<List<Action>> = _lastSuccessfulActions.asStateFlow()
     private val repo = ChatRepo(ApiProvider.api)
     val actionMap = mapOf(
         "chinanet-xxx_5G_nor_5G" to Action(
@@ -163,6 +165,11 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         RuleRepo.addRule(action)
         // 这里直接执行动作，实际应用中可能需要用户确认
         executor.execute(action)
+        _lastSuccessfulActions.value = listOf(action)
+    }
+
+    fun onActionsExecuted(actions: List<Action>) {
+        _lastSuccessfulActions.value = actions
     }
 
     fun onRuleRunResult(result: RuleRunResult) {
