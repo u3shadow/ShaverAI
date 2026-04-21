@@ -22,18 +22,68 @@
             android:textSize="14sp"
             android:textStyle="bold" />
 
-        <TextView
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="@string/env_config_title"
-            android:textColor="#9DBBE2"
-            android:textSize="12sp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/env_config_title"
+                android:textColor="#9DBBE2"
+                android:textSize="12sp" />
+
+            <ProgressBar
+                android:id="@+id/pbEnvExecLoading"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:indeterminate="true"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tvEnvExecResult"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:gravity="center"
+                android:text=""
+                android:textColor="#62F59A"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </LinearLayout>
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvEnvConfig"
             android:layout_width="match_parent"
             android:layout_height="120dp"
+            android:layout_marginTop="4dp"
+            android:overScrollMode="ifContentScrolls"
+            android:scrollbars="vertical" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="规则列表"
+            android:textColor="#9DBBE2"
+            android:textSize="12sp" />
+
+        <Spinner
+            android:id="@+id/spRuleProfiles"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="@android:color/transparent" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvRuleList"
+            android:layout_width="match_parent"
+            android:layout_height="84dp"
             android:layout_marginTop="4dp"
             android:overScrollMode="ifContentScrolls"
             android:scrollbars="vertical" />

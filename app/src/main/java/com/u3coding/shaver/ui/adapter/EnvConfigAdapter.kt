@@ -3,6 +3,7 @@ package com.u3coding.shaver.ui.adapter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.u3coding.shaver.R
@@ -30,13 +31,16 @@ class EnvConfigAdapter : RecyclerView.Adapter<EnvConfigAdapter.EnvConfigViewHold
     override fun getItemCount(): Int = items.size
 
     class EnvConfigViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val row: LinearLayout = itemView.findViewById(R.id.envConfigRow)
         private val tvKey: TextView = itemView.findViewById(R.id.tvConfigKey)
         private val tvValue: TextView = itemView.findViewById(R.id.tvConfigValue)
 
         fun bind(item: EnvConfigItem) {
             tvKey.text = item.key
             tvValue.text = item.value
+            row.setBackgroundResource(
+                if (item.highlighted) R.drawable.bg_env_item_highlight else android.R.color.transparent
+            )
         }
     }
 }
-

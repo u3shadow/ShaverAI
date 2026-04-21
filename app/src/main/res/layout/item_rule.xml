@@ -1,28 +1,25 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/envConfigRow"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:paddingLeft="8dp"
-    android:paddingRight="8dp"
-    android:paddingTop="6dp"
-    android:paddingBottom="6dp">
+    android:paddingTop="5dp"
+    android:paddingBottom="5dp">
 
     <TextView
-        android:id="@+id/tvConfigKey"
+        android:id="@+id/tvRuleOperation"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:textColor="#9DBBE2"
-        android:textSize="13sp"
+        android:textSize="12sp"
         android:textStyle="bold" />
 
     <TextView
-        android:id="@+id/tvConfigValue"
+        android:id="@+id/tvRuleValue"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#EAF4FF"
-        android:textSize="13sp" />
+        android:textSize="12sp" />
 
 </LinearLayout>

@@ -1,30 +1,77 @@
-package com.u3coding.shaver.action
+﻿package com.u3coding.shaver.action
 
+import android.content.Context
+import androidx.room.Room
+import com.u3coding.shaver.data.local.RuleDatabase
+import com.u3coding.shaver.data.local.RuleEntity
 
 class RuleRepo {
-    //使用一个一对多的结构按key为ssid,value是action列表
-companion object {
-     private val rulesMap = mutableMapOf<String, MutableList<Action>>()
-    fun addRule(action: Action) {
+    companion object {
+        @Volatile
+        private var database: RuleDatabase? = null
 
-        if (!rulesMap.containsKey(action.trigger)) {
-            rulesMap[action.trigger] = mutableListOf()
+        fun init(context: Context) {
+            if (database != null) return
+            synchronized(this) {
+                if (database == null) {
+                    database = Room.databaseBuilder(
+                        context.applicationContext,
+                        RuleDatabase::class.java,
+                        "rule_store.db"
+                    )
+                        .allowMainThreadQueries()
+                        .build()
+                }
+            }
         }
-        //如果已经有相同的operation的action存在，覆盖它
-        val existingActionIndex = rulesMap[action.trigger]?.indexOfFirst { it.operation == action.operation }
-        if (existingActionIndex != null && existingActionIndex >= 0) {
-            rulesMap[action.trigger]?.set(existingActionIndex, action)
-        } else {
-            rulesMap.get(action.trigger)?.add(action)
+
+        fun addRule(action: Action) {
+            val dao = requireDao()
+            val value = action.params["value"]?.toString()
+            dao.upsert(
+                RuleEntity(
+                    action.trigger,
+                    action.operation,
+                    value
+                )
+            )
+        }
+
+        fun getRules(ssid: String): List<Action> {
+            val dao = requireDao()
+            return dao.getByTrigger(ssid).map { it.toAction() }
+        }
+
+        fun getAllRulesGrouped(): Map<String, List<Action>> {
+            val dao = requireDao()
+            return dao.getAll()
+                .groupBy { it.trigger }
+                .mapValues { (_, value) -> value.map { it.toAction() } }
+        }
+
+        fun getAllTriggers(): List<String> {
+            return requireDao().getAllTriggers()
+        }
+
+        private fun requireDao() = checkNotNull(database) {
+            "RuleRepo is not initialized. Call RuleRepo.init(context) first."
+        }.ruleDao()
+
+        private fun RuleEntity.toAction(): Action {
+            val params = mutableMapOf<String, Any>()
+            parseValue(value)?.let { params["value"] = it }
+            return Action(
+                trigger = trigger,
+                operation = operation,
+                params = params
+            )
+        }
+
+        private fun parseValue(raw: String?): Any? {
+            if (raw.isNullOrBlank()) return null
+            raw.toIntOrNull()?.let { return it }
+            raw.toDoubleOrNull()?.let { return it }
+            return raw
         }
     }
-
-    fun getRules(ssid: String): List<Action> {
-        if (rulesMap.containsKey(ssid)) {
-            return rulesMap[ssid]?.toList() ?: emptyList()
-        } else {
-            return emptyList()
-        }
-    }
-}
 }
