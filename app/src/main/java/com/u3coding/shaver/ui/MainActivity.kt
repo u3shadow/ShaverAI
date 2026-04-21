@@ -136,6 +136,7 @@ class MainActivity : AppCompatActivity() {
 
         val result = ruleEngine.run(ssid)
         updateEnvFromRuleResult(result)
+        renderEnvConfigList()
         viewModel.onRuleRunResult(result)
     }
 
@@ -155,7 +156,6 @@ class MainActivity : AppCompatActivity() {
                 envState["规则状态"] = "失败: ${result.reason}"
             }
         }
-        renderEnvConfigList()
     }
 
     private fun applyActionsToEnvState(actions: List<Action>) {

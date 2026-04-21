@@ -90,14 +90,14 @@ AI：好的
 }
 
 示例3：
-当前 Wi-Fi：家里WiFi
+当前 Wi-Fi：公司WiFi
 最近聊天记录：
 用户：我回家了
 AI：好的
 当前用户输入：回家后打开蓝牙
 返回：
 {
-  "trigger": "家里WiFi",
+  "trigger": "公司WiFi",
   "operation": "open_bluetooth",
   "params": {
     "value": null
@@ -125,7 +125,7 @@ AI：好的
 当前用户输入：打开蓝牙
 返回：
 {
-  "trigger": null,
+  "trigger": 公司WiFi,
   "operation": "open_bluetooth",
   "params": {
     "value": null
