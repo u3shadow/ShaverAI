@@ -23,6 +23,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Shaver" >
         <activity android:name="com.u3coding.shaver.ui.MainActivity"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize|stateHidden"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN">

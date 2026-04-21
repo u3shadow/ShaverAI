@@ -3,6 +3,7 @@
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
@@ -10,6 +11,11 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.addTextChangedListener
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updateLayoutParams
+import androidx.core.view.updatePadding
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -31,6 +37,7 @@ import com.u3coding.shaver.ui.model.EnvConfigItem
 import com.u3coding.shaver.ui.permission.PermissionRequestHelper
 import com.u3coding.shaver.model.Role
 import kotlinx.coroutines.launch
+import kotlin.math.max
 
 class MainActivity : AppCompatActivity() {
 
@@ -44,6 +51,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvWifiStatus: TextView
     private lateinit var pbEnvExecLoading: ProgressBar
     private lateinit var tvEnvExecResult: TextView
+    private lateinit var topBar: View
+    private lateinit var composerBar: View
     private lateinit var rvChat: RecyclerView
     private lateinit var chatAdapter: ChatMessageAdapter
     private lateinit var envConfigAdapter: EnvConfigAdapter
@@ -59,6 +68,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN
+        )
         setContentView(R.layout.main_activity)
 
         RuleRepo.init(applicationContext)
@@ -72,6 +86,8 @@ class MainActivity : AppCompatActivity() {
         tvWifiStatus = findViewById(R.id.tvWifiStatus)
         pbEnvExecLoading = findViewById(R.id.pbEnvExecLoading)
         tvEnvExecResult = findViewById(R.id.tvEnvExecResult)
+        topBar = findViewById(R.id.topBar)
+        composerBar = findViewById(R.id.composerBar)
         val et = findViewById<EditText>(R.id.etInput)
         inputEditText = et
         val btn = findViewById<Button>(R.id.btnSend)
@@ -120,7 +136,31 @@ class MainActivity : AppCompatActivity() {
             trySendMessage()
         }
 
+        setupInsets()
         onWifiMaybeChanged()
+    }
+
+    private fun setupInsets() {
+        val root = findViewById<View>(R.id.rootContainer)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val statusInsets = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            val navInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+
+            topBar.updatePadding(top = statusInsets.top + dp(14))
+
+            val bottomInset = max(navInsets.bottom, imeInsets.bottom)
+            composerBar.updateLayoutParams<androidx.constraintlayout.widget.ConstraintLayout.LayoutParams> {
+                bottomMargin = dp(12) + bottomInset
+            }
+
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 
     override fun onResume() {
