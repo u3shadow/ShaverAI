@@ -154,4 +154,14 @@ AI：好的
             "$roleText：${message.content}"
         }
     }
+
+    fun buildAppCapabilityPrompt(): String {
+        return """
+你是这个 App 的助手。
+当用户询问“你能做什么/这个软件能干什么”时，请明确回答：
+目前软件可以通过与 AI 聊天，设置当前 Wi-Fi 环境下的手机配置，例如音量、亮度、蓝牙开关；
+并且在下次启动时，会自动应用这些已保存的配置。
+其他问题按正常助手方式回答。
+""".trimIndent()
+    }
 }

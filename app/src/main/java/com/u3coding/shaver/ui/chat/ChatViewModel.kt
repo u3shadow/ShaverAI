@@ -130,7 +130,11 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                     status = MessageStatus.DONE
                 )
             )
-            history1 = buildRequestMessages(normalContextManager.getLastMessages())
+            history1 = buildRequestMessages(
+                buildNormalChatRequestUiMessages(
+                    normalContextManager.getLastMessages()
+                )
+            )
         }
         return history1
     }
@@ -184,6 +188,19 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                 status = MessageStatus.DONE
             )) + uiMessages
         }
+    }
+
+    private fun buildNormalChatRequestUiMessages(uiMessages: List<UiMessage>): List<UiMessage> {
+        val capabilityPrompt = PromptBuilder().buildAppCapabilityPrompt()
+        return listOf(
+            UiMessage(
+                id = "system-normal-${System.currentTimeMillis()}",
+                role = Role.SYSTEM,
+                content = capabilityPrompt,
+                wifiSsid = currentRoundWifiSsid,
+                status = MessageStatus.DONE
+            )
+        ) + uiMessages
     }
 
     fun stopGenerating() {
