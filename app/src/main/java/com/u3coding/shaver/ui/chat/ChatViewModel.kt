@@ -2,11 +2,9 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.gson.Gson
 import com.u3coding.shaver.data.remote.ApiProvider
 import com.u3coding.shaver.data.remote.ChatMessage
 import com.u3coding.shaver.data.repository.ChatRepo
-import com.u3coding.shaver.device.ChangeBlueTooth
 import com.u3coding.shaver.action.Action
 import com.u3coding.shaver.action.ActionDTO
 import com.u3coding.shaver.action.ActionExecutor
@@ -14,6 +12,7 @@ import com.u3coding.shaver.action.ActionParser
 import com.u3coding.shaver.action.InputClassifier
 import com.u3coding.shaver.action.InputType
 import com.u3coding.shaver.action.PromptBuilder
+import com.u3coding.shaver.action.RuleEngine
 import com.u3coding.shaver.action.RuleRepo
 import com.u3coding.shaver.action.RuleRunResult
 import com.u3coding.shaver.model.CommandChatContextManager
@@ -25,7 +24,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.launch
 
 class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
@@ -39,28 +37,9 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
     val lastSuccessfulActions: StateFlow<List<Action>> = _lastSuccessfulActions.asStateFlow()
     private val repo = ChatRepo(ApiProvider.api)
-    val actionMap = mapOf(
-        "chinanet-xxx_5G_nor_5G" to Action(
-            trigger = "chinanet-xxx_5G_nor_5G",
-            operation = "set_volume",
-            params = mapOf("value" to 0)
-        ),
-        "chinanet-xxx_5G-2" to Action(
-            trigger = "chinanet-xxx_5G-2",
-            operation = "set_brightness",
-            params = mapOf("value" to 100)
-        )
-    )
     fun requiresBluetoothPermission(input: String): Boolean {
         return input.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) ||
             input.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true)
-    }
-
-
-
-
-    fun sendStreamMessage(input: String, wifiSsid: String? = null) {
-        handleUserInput(input, wifiSsid)
     }
 
     fun handleUserInput(input: String, wifiSsid: String?) {
@@ -164,8 +143,8 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         val action = result.toAction()
         RuleRepo.addRule(action)
         // 这里直接执行动作，实际应用中可能需要用户确认
-        //executor.execute(action)
-       // _lastSuccessfulActions.value = listOf(action)
+        executor.execute(action)
+        _lastSuccessfulActions.value = listOf(action)
     }
 
     fun onActionsExecuted(actions: List<Action>) {
@@ -219,20 +198,6 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                 id = System.currentTimeMillis().toString(),
                 role = Role.USER,
                 content = input,
-                wifiSsid = wifiSsid,
-                status = MessageStatus.DONE
-            )
-        )
-        _messages.value = list
-    }
-
-    private fun addAssistantDoneMessage(text: String, wifiSsid: String?) {
-        val list = _messages.value.toMutableList()
-        list.add(
-            UiMessage(
-                id = System.currentTimeMillis().toString(),
-                role = Role.ASSISTANT,
-                content = text,
                 wifiSsid = wifiSsid,
                 status = MessageStatus.DONE
             )

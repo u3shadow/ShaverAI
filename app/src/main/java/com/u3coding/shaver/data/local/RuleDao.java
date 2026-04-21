@@ -14,10 +14,4 @@ public interface RuleDao {
 
     @Query("SELECT * FROM rules WHERE trigger = :trigger ORDER BY operation")
     List<RuleEntity> getByTrigger(String trigger);
-
-    @Query("SELECT * FROM rules ORDER BY trigger, operation")
-    List<RuleEntity> getAll();
-
-    @Query("SELECT DISTINCT trigger FROM rules ORDER BY trigger")
-    List<String> getAllTriggers();
 }

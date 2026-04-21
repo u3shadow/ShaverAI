@@ -29,6 +29,7 @@ import com.u3coding.shaver.ui.chat.ChatViewModel
 import com.u3coding.shaver.ui.chat.ChatViewModelFactory
 import com.u3coding.shaver.ui.model.EnvConfigItem
 import com.u3coding.shaver.ui.permission.PermissionRequestHelper
+import com.u3coding.shaver.model.Role
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -91,9 +92,10 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     viewModel.messages.collect { list ->
-                        chatAdapter.submitList(list)
-                        if (list.isNotEmpty()) {
-                            rvChat.scrollToPosition(list.lastIndex)
+                        val visibleList = list.filter { it.role != Role.SYSTEM }
+                        chatAdapter.submitList(visibleList)
+                        if (visibleList.isNotEmpty()) {
+                            rvChat.scrollToPosition(visibleList.lastIndex)
                         }
                     }
                 }
@@ -233,7 +235,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshChatList() {
-        val list = viewModel.messages.value
+        val list = viewModel.messages.value.filter { it.role != Role.SYSTEM }
         chatAdapter.submitList(list.toList())
         if (list.isNotEmpty()) {
             rvChat.scrollToPosition(list.lastIndex)

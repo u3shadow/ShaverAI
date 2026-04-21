@@ -42,17 +42,6 @@ class RuleRepo {
             return dao.getByTrigger(ssid).map { it.toAction() }
         }
 
-        fun getAllRulesGrouped(): Map<String, List<Action>> {
-            val dao = requireDao()
-            return dao.getAll()
-                .groupBy { it.trigger }
-                .mapValues { (_, value) -> value.map { it.toAction() } }
-        }
-
-        fun getAllTriggers(): List<String> {
-            return requireDao().getAllTriggers()
-        }
-
         private fun requireDao() = checkNotNull(database) {
             "RuleRepo is not initialized. Call RuleRepo.init(context) first."
         }.ruleDao()
