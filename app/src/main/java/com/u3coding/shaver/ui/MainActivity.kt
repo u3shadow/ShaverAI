@@ -3,12 +3,9 @@
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
-import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -28,11 +25,9 @@ import com.u3coding.shaver.action.RuleRunResult
 import com.u3coding.shaver.device.WifiProvider
 import com.u3coding.shaver.ui.adapter.ChatMessageAdapter
 import com.u3coding.shaver.ui.adapter.EnvConfigAdapter
-import com.u3coding.shaver.ui.adapter.RuleListAdapter
 import com.u3coding.shaver.ui.chat.ChatViewModel
 import com.u3coding.shaver.ui.chat.ChatViewModelFactory
 import com.u3coding.shaver.ui.model.EnvConfigItem
-import com.u3coding.shaver.ui.model.RuleDisplayItem
 import com.u3coding.shaver.ui.permission.PermissionRequestHelper
 import kotlinx.coroutines.launch
 
@@ -51,11 +46,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rvChat: RecyclerView
     private lateinit var chatAdapter: ChatMessageAdapter
     private lateinit var envConfigAdapter: EnvConfigAdapter
-    private lateinit var spRuleProfiles: Spinner
-    private lateinit var ruleListAdapter: RuleListAdapter
 
     private var input: String = ""
-    private var currentSelectedTrigger: String? = null
     private val changedConfigKeys = mutableSetOf<String>()
     private val envState = linkedMapOf(
         "Wi-Fi" to "unknown",
@@ -93,15 +85,7 @@ class MainActivity : AppCompatActivity() {
         envConfigAdapter = EnvConfigAdapter()
         rvEnvConfig.adapter = envConfigAdapter
 
-        spRuleProfiles = findViewById(R.id.spRuleProfiles)
-        val rvRuleList = findViewById<RecyclerView>(R.id.rvRuleList)
-        rvRuleList.layoutManager = LinearLayoutManager(this)
-        ruleListAdapter = RuleListAdapter()
-        rvRuleList.adapter = ruleListAdapter
-        setupRuleProfileSpinner()
-
         renderEnvConfigList()
-        reloadRuleProfiles()
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -120,7 +104,6 @@ class MainActivity : AppCompatActivity() {
                             renderEnvConfigList()
                             refreshChatList()
                             setExecutionSuccess()
-                            reloadRuleProfiles(actions.firstOrNull()?.trigger)
                         }
                     }
                 }
@@ -141,80 +124,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         onWifiMaybeChanged()
-    }
-
-    private fun setupRuleProfileSpinner() {
-        spRuleProfiles.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val selected = parent?.getItemAtPosition(position)?.toString().orEmpty()
-                if (selected.isBlank() || selected == "暂无配置") {
-                    ruleListAdapter.submitList(emptyList())
-                    currentSelectedTrigger = null
-                    return
-                }
-                currentSelectedTrigger = selected
-                updateDisplayedWifiSsid(selected)
-                renderRuleListForTrigger(selected)
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {
-            }
-        }
-    }
-
-    private fun reloadRuleProfiles(preferredTrigger: String? = null) {
-        val triggers = RuleRepo.getAllTriggers()
-        val spinnerItems = if (triggers.isEmpty()) listOf("暂无配置") else triggers
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, spinnerItems)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spRuleProfiles.adapter = adapter
-
-        if (triggers.isEmpty()) {
-            currentSelectedTrigger = null
-            ruleListAdapter.submitList(emptyList())
-            return
-        }
-
-        val target = when {
-            !preferredTrigger.isNullOrBlank() && triggers.contains(preferredTrigger) -> preferredTrigger
-            !currentSelectedTrigger.isNullOrBlank() && triggers.contains(currentSelectedTrigger) -> currentSelectedTrigger
-            else -> triggers.first()
-        } ?: triggers.first()
-
-        currentSelectedTrigger = target
-        spRuleProfiles.setSelection(triggers.indexOf(target), false)
-        updateDisplayedWifiSsid(target)
-        renderRuleListForTrigger(target)
-    }
-
-    private fun renderRuleListForTrigger(trigger: String) {
-        val actions = RuleRepo.getRules(trigger)
-        val items = actions.map {
-            RuleDisplayItem(
-                operation = operationLabel(it.operation),
-                value = actionValueLabel(it)
-            )
-        }
-        ruleListAdapter.submitList(items)
-    }
-
-    private fun operationLabel(operation: String): String {
-        return when (operation) {
-            "set_brightness" -> "亮度"
-            "set_volume" -> "音量"
-            "open_bluetooth" -> "蓝牙"
-            "close_bluetooth" -> "蓝牙"
-            else -> operation
-        }
-    }
-
-    private fun actionValueLabel(action: Action): String {
-        return when (action.operation) {
-            "set_brightness", "set_volume" -> "${action.params["value"] ?: "-"}%"
-            "open_bluetooth" -> "开启"
-            "close_bluetooth" -> "关闭"
-            else -> action.params.toString()
-        }
     }
 
     private fun trySendMessage() {
@@ -254,7 +163,6 @@ class MainActivity : AppCompatActivity() {
         val ssid = wifiProvider.getCurrentWifiSsid() ?: return
 
         updateDisplayedWifiSsid(ssid)
-        reloadRuleProfiles(ssid)
 
         val result = ruleEngine.run(ssid)
         updateEnvFromRuleResult(result)

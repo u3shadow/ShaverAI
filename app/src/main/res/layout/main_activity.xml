@@ -65,28 +65,6 @@
             android:overScrollMode="ifContentScrolls"
             android:scrollbars="vertical" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="规则列表"
-            android:textColor="#9DBBE2"
-            android:textSize="12sp" />
-
-        <Spinner
-            android:id="@+id/spRuleProfiles"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:background="@android:color/transparent" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rvRuleList"
-            android:layout_width="match_parent"
-            android:layout_height="84dp"
-            android:layout_marginTop="4dp"
-            android:overScrollMode="ifContentScrolls"
-            android:scrollbars="vertical" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

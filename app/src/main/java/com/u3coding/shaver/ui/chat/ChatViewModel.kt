@@ -164,8 +164,8 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         val action = result.toAction()
         RuleRepo.addRule(action)
         // 这里直接执行动作，实际应用中可能需要用户确认
-        executor.execute(action)
-        _lastSuccessfulActions.value = listOf(action)
+        //executor.execute(action)
+       // _lastSuccessfulActions.value = listOf(action)
     }
 
     fun onActionsExecuted(actions: List<Action>) {
