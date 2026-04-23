@@ -20,6 +20,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.android.material.snackbar.Snackbar
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.u3coding.shaver.R
@@ -31,6 +32,7 @@ import com.u3coding.shaver.action.RuleRunResult
 import com.u3coding.shaver.device.WifiProvider
 import com.u3coding.shaver.ui.adapter.ChatMessageAdapter
 import com.u3coding.shaver.ui.adapter.EnvConfigAdapter
+import com.u3coding.shaver.ui.chat.ChatUiEvent
 import com.u3coding.shaver.ui.chat.ChatViewModel
 import com.u3coding.shaver.ui.chat.ChatViewModelFactory
 import com.u3coding.shaver.ui.model.EnvConfigItem
@@ -58,6 +60,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var envConfigAdapter: EnvConfigAdapter
 
     private var input: String = ""
+    private var lastHandledActionVersion: Long = -1L
     private val changedConfigKeys = mutableSetOf<String>()
     private val envState = linkedMapOf(
         "Wi-Fi" to "unknown",
@@ -107,21 +110,39 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    viewModel.messages.collect { list ->
-                        val visibleList = list.filter { it.role != Role.SYSTEM }
+                    viewModel.uiState.collect { state ->
+                        val visibleList = state.messages.filter { it.role != Role.SYSTEM }
                         chatAdapter.submitList(visibleList)
                         if (visibleList.isNotEmpty()) {
                             rvChat.scrollToPosition(visibleList.lastIndex)
                         }
+
+                    val actions = state.lastSuccessfulActions
+                    if (actions.isNotEmpty() && state.actionUpdateVersion != lastHandledActionVersion) {
+                        lastHandledActionVersion = state.actionUpdateVersion
+                        applyActionsToEnvState(actions)
+                        renderEnvConfigList()
+                        refreshChatList()
+                        setExecutionSuccess()
+                    }
                     }
                 }
                 launch {
-                    viewModel.lastSuccessfulActions.collect { actions ->
-                        if (actions.isNotEmpty()) {
-                            applyActionsToEnvState(actions)
-                            renderEnvConfigList()
-                            refreshChatList()
-                            setExecutionSuccess()
+                    viewModel.events.collect { event ->
+                        when (event) {
+                            is ChatUiEvent.RequestBluetoothPermission -> {
+                                permissionHelper.requestBluetoothConnectPermission()
+                            }
+                            is ChatUiEvent.ShowToast -> {
+                                Toast.makeText(this@MainActivity, event.message, Toast.LENGTH_SHORT).show()
+                            }
+                            is ChatUiEvent.ShowSnackbar -> {
+                                val root = findViewById<View>(R.id.rootContainer)
+                                Snackbar.make(root, event.message, Snackbar.LENGTH_SHORT).show()
+                            }
+                            is ChatUiEvent.Navigate -> {
+                                // reserved for future navigation events
+                            }
                         }
                     }
                 }
@@ -174,19 +195,16 @@ class MainActivity : AppCompatActivity() {
             return
         }
         setExecutionRunning()
-
-        if (viewModel.requiresBluetoothPermission(message) && !permissionHelper.hasBluetoothConnectPermission()) {
-            permissionHelper.requestBluetoothConnectPermission()
-            return
-        }
-        if (!permissionHelper.hasWriteSettingsPermission()) {
-            Toast.makeText(this, getString(R.string.write_settings_not_granted), Toast.LENGTH_SHORT).show()
-            setExecutionFailed()
-            return
-        }
-        if (!permissionHelper.hasWifiPermission()) {
-            Toast.makeText(this, getString(R.string.wifi_permission_denied), Toast.LENGTH_SHORT).show()
-            permissionHelper.requestWifiPermission()
+        val canSend = viewModel.canSendMessage(
+            input = message,
+            hasBluetoothPermission = permissionHelper.hasBluetoothConnectPermission(),
+            hasWriteSettingsPermission = permissionHelper.hasWriteSettingsPermission(),
+            hasWifiPermission = permissionHelper.hasWifiPermission()
+        )
+        if (!canSend) {
+            if (!permissionHelper.hasWifiPermission()) {
+                permissionHelper.requestWifiPermission()
+            }
             setExecutionFailed()
             return
         }
@@ -275,7 +293,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshChatList() {
-        val list = viewModel.messages.value.filter { it.role != Role.SYSTEM }
+        val list = viewModel.uiState.value.messages.filter { it.role != Role.SYSTEM }
         chatAdapter.submitList(list.toList())
         if (list.isNotEmpty()) {
             rvChat.scrollToPosition(list.lastIndex)

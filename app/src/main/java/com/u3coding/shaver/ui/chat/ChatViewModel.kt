@@ -21,23 +21,52 @@ import com.u3coding.shaver.model.NormalChatContextManager
 import com.u3coding.shaver.model.Role
 import com.u3coding.shaver.model.UiMessage
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
 class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
-
+    private val _uiState = MutableStateFlow(ChatUiState())
+    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+    private val _events = MutableSharedFlow<ChatUiEvent>()
+    val events = _events.asSharedFlow()
     private var currentJob: Job? = null
+    private var actionUpdateVersionCounter: Long = 0L
     private var currentRoundWifiSsid: String? = null
-    private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
-    private val _lastSuccessfulActions = MutableStateFlow<List<Action>>(emptyList())
     private val normalContextManager = NormalChatContextManager()
     private val commandContextManager = CommandChatContextManager()
-    val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
-    val lastSuccessfulActions: StateFlow<List<Action>> = _lastSuccessfulActions.asStateFlow()
     private val repo = ChatRepo(ApiProvider.api)
+
+    fun canSendMessage(
+        input: String,
+        hasBluetoothPermission: Boolean,
+        hasWriteSettingsPermission: Boolean,
+        hasWifiPermission: Boolean
+    ): Boolean {
+        val message = input.trim()
+        if (message.isBlank()) {
+            return false
+        }
+        if (requiresBluetoothPermission(message) && !hasBluetoothPermission) {
+            emitEvent(ChatUiEvent.RequestBluetoothPermission("蓝牙操作需要蓝牙连接权限"))
+            return false
+        }
+        if (!hasWriteSettingsPermission) {
+            emitEvent(ChatUiEvent.ShowToast("未授予修改系统设置权限，亮度设置可能仅在应用内生效"))
+            return false
+        }
+        if (!hasWifiPermission) {
+            emitEvent(ChatUiEvent.ShowToast("未授予 Wi-Fi 读取权限"))
+            return false
+        }
+        return true
+    }
+
     fun requiresBluetoothPermission(input: String): Boolean {
         return input.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) ||
             input.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true)
@@ -74,6 +103,13 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
 
     private fun runStreamRequest(inputType: InputType, history: List<ChatMessage>) {
         currentJob?.cancel()
+        _uiState.update {
+            it.copy(
+                isGenerating = true,
+                canSend = false,
+                showStopButton = true
+            )
+        }
         var launchedJob: Job? = null
         launchedJob = viewModelScope.launch {
             var currentText = ""
@@ -88,6 +124,7 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                     val result = ActionParser().parseActionDTO(currentText)
                     if (!ActionParser().ActionValidator(result)) {
                         markLastAiError("解析结果不合法")
+                        emitEvent(ChatUiEvent.ShowSnackbar("解析结果不合法"))
                     } else {
                         handleParsedActionResult(result)
                     }
@@ -97,9 +134,17 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                 throw e
             }catch (e: Exception){
                 markLastAiError("请求失败：${e.message ?: "unknown error"}")
+                emitEvent(ChatUiEvent.ShowSnackbar("请求失败：${e.message ?: "unknown error"}"))
             }finally {
                 if (launchedJob === currentJob)
                 currentJob = null
+                _uiState.update {
+                    it.copy(
+                        isGenerating = false,
+                        canSend = true,
+                        showStopButton = false
+                    )
+                }
             }
         }
         currentJob = launchedJob
@@ -157,11 +202,23 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         RuleRepo.addRule(action)
         // 这里直接执行动作，实际应用中可能需要用户确认
         executor.execute(action)
-        _lastSuccessfulActions.value = listOf(action)
+        actionUpdateVersionCounter += 1
+        _uiState.update { old ->
+            old.copy(
+                lastSuccessfulActions = listOf(action),
+                actionUpdateVersion = actionUpdateVersionCounter
+            )
+        }
     }
 
     fun onActionsExecuted(actions: List<Action>) {
-        _lastSuccessfulActions.value = actions
+        actionUpdateVersionCounter += 1
+        _uiState.update { old ->
+            old.copy(
+                lastSuccessfulActions = actions,
+                actionUpdateVersion = actionUpdateVersionCounter
+            )
+        }
     }
 
     fun onRuleRunResult(result: RuleRunResult) {
@@ -171,24 +228,23 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
             is RuleRunResult.SkippedDuplicate -> "已经执行过相同规则，跳过"
             is RuleRunResult.Failed -> "执行失败，原因：${result.reason}"
         }
-        val list = _messages.value.toMutableList()
-        list.add(
-            UiMessage(
-                id = "rule-${System.currentTimeMillis()}",
-                role = Role.SYSTEM,
-                content = content,
-                wifiSsid = currentRoundWifiSsid,
-                status = MessageStatus.DONE
-            )
+        val newMessage = UiMessage(
+            id = "rule-${System.currentTimeMillis()}",
+            role = Role.SYSTEM,
+            content = content,
+            wifiSsid = currentRoundWifiSsid,
+            status = MessageStatus.DONE
         )
-        _messages.value = list
+        _uiState.update { old ->
+            old.copy(messages = old.messages + newMessage)
+        }
     }
 
     private fun buildRequestUiMessages(uiMessages: List<UiMessage>, wifiSsid: String?): List<UiMessage> {
         if (wifiSsid.isNullOrBlank()) {
             return uiMessages
         }
-        return PromptBuilder().build(uiMessages.last().content, wifiSsid,messages.value).let { systemPrompt ->
+        return PromptBuilder().build(uiMessages.last().content, wifiSsid, uiState.value.messages).let { systemPrompt ->
             listOf(UiMessage(
                 id = "system-${System.currentTimeMillis()}",
                 role = Role.SYSTEM,
@@ -215,24 +271,30 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
     fun stopGenerating() {
         currentJob?.cancel()
         currentJob  = null
+        _uiState.update {
+            it.copy(
+                isGenerating = false,
+                canSend = true,
+                showStopButton = false
+            )
+        }
     }
 
     private fun addUserMessage(input: String, wifiSsid: String?) {
-        val list = _messages.value.toMutableList()
-        list.add(
-            UiMessage(
-                id = System.currentTimeMillis().toString(),
-                role = Role.USER,
-                content = input,
-                wifiSsid = wifiSsid,
-                status = MessageStatus.DONE
-            )
+        val newMessage = UiMessage(
+            id = System.currentTimeMillis().toString(),
+            role = Role.USER,
+            content = input,
+            wifiSsid = wifiSsid,
+            status = MessageStatus.DONE
         )
-        _messages.value = list
+        _uiState.update { old ->
+            old.copy(messages = old.messages + newMessage)
+        }
     }
 
     private fun updateLastAiMessage(text: String) {
-        val list = _messages.value.toMutableList()
+        val list = uiState.value.messages.toMutableList()
         if (list.lastOrNull()?.role == Role.ASSISTANT) {
             val old = list.last()
             list[list.lastIndex] = old.copy(content = text, status = MessageStatus.GENERATING)
@@ -247,20 +309,24 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                 )
             )
         }
-        _messages.value = list
+        _uiState.update { old ->
+            old.copy(messages = list)
+        }
     }
 
     private fun markLastAiDone() {
-        val list = _messages.value.toMutableList()
+        val list = uiState.value.messages.toMutableList()
         val index = list.indexOfLast { it.role == Role.ASSISTANT }
         if (index >= 0) {
             list[index] = list[index].copy(status = MessageStatus.DONE)
-            _messages.value = list
+            _uiState.update { old ->
+                old.copy(messages = list)
+            }
         }
     }
 
     private fun markLastAiError(text: String) {
-        val list = _messages.value.toMutableList()
+        val list = uiState.value.messages.toMutableList()
         val index = list.indexOfLast { it.role == Role.ASSISTANT }
         if (index >= 0) {
             list[index] = list[index].copy(content = text, status = MessageStatus.ERROR)
@@ -275,15 +341,19 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                 )
             )
         }
-        _messages.value = list
+        _uiState.update { old ->
+            old.copy(messages = list)
+        }
     }
 
     private fun markLastAiCancelled() {
-        val list = _messages.value.toMutableList()
+        val list = uiState.value.messages.toMutableList()
         val index = list.indexOfLast { it.role == Role.ASSISTANT && it.status == MessageStatus.GENERATING }
         if (index >= 0) {
             list[index] = list[index].copy(status = MessageStatus.CANCELLED)
-            _messages.value = list
+            _uiState.update { old ->
+                old.copy(messages = list)
+            }
         }
     }
 
@@ -322,4 +392,25 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         private const val OPEN_BLUETOOTH_CMD = "打开蓝牙"
         private const val CLOSE_BLUETOOTH_CMD = "关闭蓝牙"
     }
+
+    private fun emitEvent(event: ChatUiEvent) {
+        viewModelScope.launch {
+            _events.emit(event)
+        }
+    }
+}
+data class ChatUiState(
+    val messages: List<UiMessage> = emptyList(),
+    val isGenerating: Boolean = false,
+    val canSend: Boolean = true,
+    val showStopButton: Boolean = false,
+    val inputMode: InputType = InputType.NormalChat,
+    val lastSuccessfulActions: List<Action> = emptyList(),
+    val actionUpdateVersion: Long = 0L
+)
+sealed class ChatUiEvent {
+    data class ShowToast(val message: String) : ChatUiEvent()
+    data class RequestBluetoothPermission(val reason: String) : ChatUiEvent()
+    data class ShowSnackbar(val message: String) : ChatUiEvent()
+    data class Navigate(val route: String) : ChatUiEvent()
 }
