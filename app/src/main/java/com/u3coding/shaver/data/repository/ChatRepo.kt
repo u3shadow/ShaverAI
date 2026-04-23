@@ -6,6 +6,8 @@ import com.u3coding.shaver.data.remote.ChatMessage
 import com.u3coding.shaver.data.remote.ChatRequest
 import com.u3coding.shaver.data.remote.StreamChatResponse
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -31,8 +33,9 @@ class ChatRepo(private val api: API) {
                 var line: String?
 
                 while (true) {
+                    currentCoroutineContext().ensureActive()
                     line = reader.readLine() ?: break
-
+                    currentCoroutineContext().ensureActive()
                     if (line.isBlank()) continue
                     if (line.startsWith(":")) continue
                     if (!line.startsWith("data:")) continue
@@ -48,6 +51,7 @@ class ChatRepo(private val api: API) {
                             ?.content
 
                         if (!content.isNullOrEmpty()) {
+                            currentCoroutineContext().ensureActive()
                             emit(content)
                         }
                     } catch (_: Exception) {

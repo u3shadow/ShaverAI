@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
 
@@ -73,7 +74,8 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
 
     private fun runStreamRequest(inputType: InputType, history: List<ChatMessage>) {
         currentJob?.cancel()
-        currentJob = viewModelScope.launch {
+        var launchedJob: Job? = null
+        launchedJob = viewModelScope.launch {
             var currentText = ""
             try {
                 repo.streamChat(history).collect { token ->
@@ -90,10 +92,17 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                         handleParsedActionResult(result)
                     }
                 }
-            } catch (e: Exception) {
+            }catch (e: CancellationException) {
+                markLastAiCancelled()
+                throw e
+            }catch (e: Exception){
                 markLastAiError("请求失败：${e.message ?: "unknown error"}")
+            }finally {
+                if (launchedJob === currentJob)
+                currentJob = null
             }
         }
+        currentJob = launchedJob
     }
 
     private fun getHistory(
@@ -205,7 +214,7 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
 
     fun stopGenerating() {
         currentJob?.cancel()
-        markLastAiCancelled()
+        currentJob  = null
     }
 
     private fun addUserMessage(input: String, wifiSsid: String?) {
