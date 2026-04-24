@@ -219,12 +219,19 @@ class MainActivity : AppCompatActivity() {
         if (!permissionHelper.hasWifiPermission()) {
             return
         }
+
         setExecutionRunning()
+
         val ssid = wifiProvider.getCurrentWifiSsid() ?: return
 
         updateDisplayedWifiSsid(ssid)
 
+        viewModel.onSystemEvent(
+            event = "wifi_changed",
+            wifiSsid = ssid
+        )
         val result = ruleEngine.run(ssid)
+
         updateEnvFromRuleResult(result)
         renderEnvConfigList()
         viewModel.onRuleRunResult(result)

@@ -9,6 +9,8 @@ import com.u3coding.shaver.action.Action
 import com.u3coding.shaver.action.ActionDTO
 import com.u3coding.shaver.action.ActionExecutor
 import com.u3coding.shaver.action.ActionParser
+import com.u3coding.shaver.action.AgentTask
+import com.u3coding.shaver.action.AgentTaskScheduler
 import com.u3coding.shaver.action.InputClassifier
 import com.u3coding.shaver.action.InputType
 import com.u3coding.shaver.action.PromptBuilder
@@ -41,7 +43,18 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
     private val normalContextManager = NormalChatContextManager()
     private val commandContextManager = CommandChatContextManager()
     private val repo = ChatRepo(ApiProvider.api)
-
+    private val scheduler = AgentTaskScheduler(
+        scope = viewModelScope,
+        onChatTask = { task ->
+            handleNormalChatInput(task.text, task.wifiSsid)
+        },
+        onCommandTask = { task ->
+            handleCommandInput(task.text, task.wifiSsid)
+        },
+        onSystemEventTask = { task ->
+            handleSystemEventTask(task)
+        }
+    )
     fun canSendMessage(
         input: String,
         hasBluetoothPermission: Boolean,
@@ -73,13 +86,56 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
     }
 
     fun handleUserInput(input: String, wifiSsid: String?) {
-        when (InputClassifier.classify(input)) {
-            InputType.NormalChat -> handleNormalChatInput(input, wifiSsid)
-            InputType.CommandChat -> handleCommandInput(input, wifiSsid)
+        val message = input.trim()
+        if (message.isBlank()) return
+
+        when (InputClassifier.classify(message)) {
+            InputType.NormalChat -> {
+                scheduler.submit(
+                    AgentTask.ChatTask(
+                        text = message,
+                        wifiSsid = wifiSsid
+                    )
+                )
+            }
+
+            InputType.CommandChat -> {
+                scheduler.submit(
+                    AgentTask.CommandTask(
+                        text = message,
+                        wifiSsid = wifiSsid
+                    )
+                )
+            }
         }
     }
+    fun onSystemEvent(event: String, wifiSsid: String?) {
+        scheduler.submit(
+            AgentTask.SystemEventTask(
+                event = event,
+                wifiSsid = wifiSsid
+            )
+        )
+    }
+    private suspend fun handleSystemEventTask(task: AgentTask.SystemEventTask) {
+        val content = when (task.event) {
+            "wifi_changed" -> "检测到 Wi-Fi 变化：${task.wifiSsid ?: "未知 Wi-Fi"}"
+            else -> "收到系统事件：${task.event}"
+        }
 
-    private fun handleNormalChatInput(input: String, wifiSsid: String?) {
+        val newMessage = UiMessage(
+            id = "system-${System.currentTimeMillis()}",
+            role = Role.SYSTEM,
+            content = content,
+            wifiSsid = task.wifiSsid,
+            status = MessageStatus.DONE
+        )
+
+        _uiState.update { old ->
+            old.copy(messages = old.messages + newMessage)
+        }
+    }
+    private suspend fun handleNormalChatInput(input: String, wifiSsid: String?) {
         val message = input.trim()
         if (message.isBlank()) {
             return
@@ -90,7 +146,7 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         runStreamRequest(InputType.NormalChat, history)
     }
 
-    private fun handleCommandInput(input: String, wifiSsid: String?) {
+    private suspend  fun handleCommandInput(input: String, wifiSsid: String?) {
         val message = input.trim()
         if (message.isBlank()) {
             return
@@ -101,53 +157,41 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         runStreamRequest(InputType.CommandChat, history)
     }
 
-    private fun runStreamRequest(inputType: InputType, history: List<ChatMessage>) {
-        currentJob?.cancel()
-        _uiState.update {
-            it.copy(
-                isGenerating = true,
-                canSend = false,
-                showStopButton = true
-            )
-        }
-        var launchedJob: Job? = null
-        launchedJob = viewModelScope.launch {
-            var currentText = ""
-            try {
-                repo.streamChat(history).collect { token ->
-                    currentText += token
-                    updateLastAiMessage(currentText)
-                }
-                markLastAiDone()
-                appendAssistantToContext(inputType, currentText, currentRoundWifiSsid)
-                if (inputType == InputType.CommandChat) {
-                    val result = ActionParser().parseActionDTO(currentText)
-                    if (!ActionParser().ActionValidator(result)) {
-                        markLastAiError("解析结果不合法")
-                        emitEvent(ChatUiEvent.ShowSnackbar("解析结果不合法"))
-                    } else {
-                        handleParsedActionResult(result)
-                    }
-                }
-            }catch (e: CancellationException) {
-                markLastAiCancelled()
-                throw e
-            }catch (e: Exception){
-                markLastAiError("请求失败：${e.message ?: "unknown error"}")
-                emitEvent(ChatUiEvent.ShowSnackbar("请求失败：${e.message ?: "unknown error"}"))
-            }finally {
-                if (launchedJob === currentJob)
-                currentJob = null
-                _uiState.update {
-                    it.copy(
-                        isGenerating = false,
-                        canSend = true,
-                        showStopButton = false
-                    )
+    private suspend fun runStreamRequest(inputType: InputType, history: List<ChatMessage>) {
+        var currentText = ""
+        try {
+            repo.streamChat(history).collect { token ->
+                currentText += token
+                updateLastAiMessage(currentText)
+            }
+
+            markLastAiDone()
+            appendAssistantToContext(inputType, currentText, currentRoundWifiSsid)
+
+            if (inputType == InputType.CommandChat) {
+                val result = ActionParser().parseActionDTO(currentText)
+                if (!ActionParser().ActionValidator(result)) {
+                    markLastAiError("解析结果不合法")
+                    emitEvent(ChatUiEvent.ShowSnackbar("解析结果不合法"))
+                } else {
+                    handleParsedActionResult(result)
                 }
             }
+        } catch (e: CancellationException) {
+            markLastAiCancelled()
+            throw e
+        } catch (e: Exception) {
+            markLastAiError("请求失败：${e.message ?: "unknown error"}")
+            emitEvent(ChatUiEvent.ShowSnackbar("请求失败：${e.message ?: "unknown error"}"))
+        } finally {
+            _uiState.update {
+                it.copy(
+                    isGenerating = false,
+                    canSend = true,
+                    showStopButton = false
+                )
+            }
         }
-        currentJob = launchedJob
     }
 
     private fun getHistory(
