@@ -158,6 +158,13 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
     }
 
     private suspend fun runStreamRequest(inputType: InputType, history: List<ChatMessage>) {
+        _uiState.update {
+            it.copy(
+                isGenerating = true,
+                canSend = false,
+                showStopButton = true
+            )
+        }
         var currentText = ""
         try {
             repo.streamChat(history).collect { token ->
@@ -313,8 +320,7 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
     }
 
     fun stopGenerating() {
-        currentJob?.cancel()
-        currentJob  = null
+        scheduler.stopCurrentChat()
         _uiState.update {
             it.copy(
                 isGenerating = false,
