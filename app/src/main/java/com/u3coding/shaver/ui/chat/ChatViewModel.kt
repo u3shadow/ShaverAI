@@ -8,15 +8,17 @@ import com.u3coding.shaver.data.repository.ChatRepo
 import com.u3coding.shaver.action.Action
 import com.u3coding.shaver.action.ActionDTO
 import com.u3coding.shaver.action.ActionExecutor
-import com.u3coding.shaver.action.ActionParser
 import com.u3coding.shaver.action.AgentTask
 import com.u3coding.shaver.action.AgentTaskScheduler
 import com.u3coding.shaver.action.InputClassifier
 import com.u3coding.shaver.action.InputType
+import com.u3coding.shaver.action.ModelDecision
+import com.u3coding.shaver.action.OperationList
 import com.u3coding.shaver.action.PromptBuilder
 import com.u3coding.shaver.action.RuleEngine
 import com.u3coding.shaver.action.RuleRepo
 import com.u3coding.shaver.action.RuleRunResult
+import com.u3coding.shaver.action.ToolCallParser
 import com.u3coding.shaver.model.CommandChatContextManager
 import com.u3coding.shaver.model.MessageStatus
 import com.u3coding.shaver.model.NormalChatContextManager
@@ -172,17 +174,14 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
                 updateLastAiMessage(currentText)
             }
 
-            markLastAiDone()
-            appendAssistantToContext(inputType, currentText, currentRoundWifiSsid)
-
             if (inputType == InputType.CommandChat) {
-                val result = ActionParser().parseActionDTO(currentText)
-                if (!ActionParser().ActionValidator(result)) {
-                    markLastAiError("解析结果不合法")
-                    emitEvent(ChatUiEvent.ShowSnackbar("解析结果不合法"))
-                } else {
-                    handleParsedActionResult(result)
+                val assistantText = handleModelDecision(currentText, currentRoundWifiSsid)
+                if (assistantText.isNotBlank()) {
+                    appendAssistantToContext(inputType, assistantText, currentRoundWifiSsid)
                 }
+            } else {
+                markLastAiDone()
+                appendAssistantToContext(inputType, currentText, currentRoundWifiSsid)
             }
         } catch (e: CancellationException) {
             markLastAiCancelled()
@@ -262,6 +261,76 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         }
     }
 
+    private fun handleModelDecision(rawOutput: String, wifiSsid: String?): String {
+        return when (val decision = ToolCallParser().parse(rawOutput)) {
+            is ModelDecision.ChatReply -> {
+                replaceLastAiMessage(
+                    text = decision.content,
+                    status = MessageStatus.DONE
+                )
+                decision.content
+            }
+
+            is ModelDecision.ToolCall -> {
+                val error = validateToolCall(decision)
+                if (error != null) {
+                    markLastAiError(error)
+                    emitEvent(ChatUiEvent.ShowSnackbar(error))
+                    return ""
+                }
+
+                val action = decision.toAction(wifiSsid)
+                executeAction(action)
+                val reply = "已执行：${action.operation}"
+                replaceLastAiMessage(
+                    text = reply,
+                    status = MessageStatus.DONE
+                )
+                reply
+            }
+
+            is ModelDecision.Invalid -> {
+                val error = "解析结果不合法：${decision.reason}"
+                markLastAiError(error)
+                emitEvent(ChatUiEvent.ShowSnackbar(error))
+                ""
+            }
+        }
+    }
+
+    private fun validateToolCall(decision: ModelDecision.ToolCall): String? {
+        if (!OperationList.isValidOperation(decision.actionId)) {
+            return "不支持的操作：${decision.actionId}"
+        }
+        if (decision.actionId == "set_volume" || decision.actionId == "set_brightness") {
+            val value = decision.params["value"]
+            if (value !is Number) {
+                return "${decision.actionId} 缺少数值参数 value"
+            }
+        }
+        return null
+    }
+
+    private fun ModelDecision.ToolCall.toAction(wifiSsid: String?): Action {
+        return Action(
+            trigger = wifiSsid.orEmpty(),
+            operation = actionId,
+            params = params
+        )
+    }
+
+    private fun executeAction(action: Action) {
+        RuleRepo.addRule(action)
+        executor.execute(action)
+        actionUpdateVersionCounter += 1
+        _uiState.update { old ->
+            old.copy(
+                lastSuccessfulActions = listOf(action),
+                actionUpdateVersion = actionUpdateVersionCounter
+            )
+        }
+    }
+
     fun onActionsExecuted(actions: List<Action>) {
         actionUpdateVersionCounter += 1
         _uiState.update { old ->
@@ -295,7 +364,7 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         if (wifiSsid.isNullOrBlank()) {
             return uiMessages
         }
-        return PromptBuilder().build(uiMessages.last().content, wifiSsid, uiState.value.messages).let { systemPrompt ->
+        return PromptBuilder().buildToolCallingPrompt(uiMessages.last().content, wifiSsid, uiState.value.messages).let { systemPrompt ->
             listOf(UiMessage(
                 id = "system-${System.currentTimeMillis()}",
                 role = Role.SYSTEM,
@@ -393,6 +462,20 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         }
         _uiState.update { old ->
             old.copy(messages = list)
+        }
+    }
+
+    private fun replaceLastAiMessage(text: String, status: MessageStatus) {
+        val list = uiState.value.messages.toMutableList()
+        val index = list.indexOfLast { it.role == Role.ASSISTANT }
+        if (index >= 0) {
+            list[index] = list[index].copy(
+                content = text,
+                status = status
+            )
+            _uiState.update { old ->
+                old.copy(messages = list)
+            }
         }
     }
 
