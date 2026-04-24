@@ -1,4 +1,4 @@
-package com.u3coding.shaver.action
+package com.u3coding.shaver.action.agent
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

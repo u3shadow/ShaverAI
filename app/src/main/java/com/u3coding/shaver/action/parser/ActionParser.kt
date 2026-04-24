@@ -1,6 +1,8 @@
-﻿package com.u3coding.shaver.action
+package com.u3coding.shaver.action.parser
 
 import com.google.gson.Gson
+import com.u3coding.shaver.action.model.ActionDTO
+import com.u3coding.shaver.action.model.OperationList
 
 class ActionParser {
     fun parseActionDTO(json: String): ActionDTO {

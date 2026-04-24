@@ -1,6 +1,8 @@
-package com.u3coding.shaver.action
+package com.u3coding.shaver.action.rule
 
 import android.content.Context
+import com.u3coding.shaver.action.executor.ActionExecutor
+import com.u3coding.shaver.action.model.Action
 
 class RuleEngine(val context: Context) {
     private val executor = ActionExecutor(context)

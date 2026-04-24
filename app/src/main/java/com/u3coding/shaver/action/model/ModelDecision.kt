@@ -1,4 +1,4 @@
-package com.u3coding.shaver.action
+package com.u3coding.shaver.action.model
 
 sealed class ModelDecision {
     data class ChatReply(val content: String) : ModelDecision()

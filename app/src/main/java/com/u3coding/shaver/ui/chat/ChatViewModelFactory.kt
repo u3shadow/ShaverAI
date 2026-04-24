@@ -1,8 +1,8 @@
-﻿package com.u3coding.shaver.ui.chat
+package com.u3coding.shaver.ui.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.u3coding.shaver.action.ActionExecutor
+import com.u3coding.shaver.action.executor.ActionExecutor
 
 class ChatViewModelFactory(val executor: ActionExecutor) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

@@ -1,4 +1,4 @@
-package com.u3coding.shaver.action
+package com.u3coding.shaver.action.model
 
 data class ModelDecisionDTO(
     val type: String?,

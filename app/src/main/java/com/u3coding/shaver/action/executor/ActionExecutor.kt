@@ -1,7 +1,7 @@
-package com.u3coding.shaver.action
+package com.u3coding.shaver.action.executor
 
 import android.content.Context
-import android.media.AudioManager
+import com.u3coding.shaver.action.model.Action
 import com.u3coding.shaver.device.BrightnessTool
 import com.u3coding.shaver.device.ChangeBlueTooth
 import com.u3coding.shaver.device.VolumeTool

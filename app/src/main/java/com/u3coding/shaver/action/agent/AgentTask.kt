@@ -1,4 +1,4 @@
-package com.u3coding.shaver.action
+package com.u3coding.shaver.action.agent
 
 sealed class AgentTask {
     data class ChatTask(

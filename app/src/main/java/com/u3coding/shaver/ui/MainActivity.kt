@@ -1,4 +1,4 @@
-﻿package com.u3coding.shaver.ui
+package com.u3coding.shaver.ui
 
 import android.graphics.Color
 import android.os.Bundle
@@ -24,11 +24,11 @@ import com.google.android.material.snackbar.Snackbar
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.u3coding.shaver.R
-import com.u3coding.shaver.action.Action
-import com.u3coding.shaver.action.ActionExecutor
-import com.u3coding.shaver.action.RuleEngine
-import com.u3coding.shaver.action.RuleRepo
-import com.u3coding.shaver.action.RuleRunResult
+import com.u3coding.shaver.action.model.Action
+import com.u3coding.shaver.action.executor.ActionExecutor
+import com.u3coding.shaver.action.rule.RuleEngine
+import com.u3coding.shaver.action.rule.RuleRepo
+import com.u3coding.shaver.action.rule.RuleRunResult
 import com.u3coding.shaver.device.WifiProvider
 import com.u3coding.shaver.ui.adapter.ChatMessageAdapter
 import com.u3coding.shaver.ui.adapter.EnvConfigAdapter

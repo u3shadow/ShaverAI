@@ -1,7 +1,8 @@
-﻿package com.u3coding.shaver.action
+package com.u3coding.shaver.action.rule
 
 import android.content.Context
 import androidx.room.Room
+import com.u3coding.shaver.action.model.Action
 import com.u3coding.shaver.data.local.RuleDatabase
 import com.u3coding.shaver.data.local.RuleEntity
 
