@@ -1,5 +1,9 @@
 package com.u3coding.shaver.ui.chat
 
+import android.app.Application
+import android.content.Context
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.u3coding.shaver.data.remote.ApiProvider
@@ -19,6 +23,9 @@ import com.u3coding.shaver.action.rule.RuleRepo
 import com.u3coding.shaver.action.rule.RuleRunResult
 import com.u3coding.shaver.action.parser.ToolCallParser
 import com.u3coding.shaver.model.CommandChatContextManager
+import com.u3coding.shaver.model.IntentFeatureExtractor
+import com.u3coding.shaver.model.LocalIntent
+import com.u3coding.shaver.model.LocalIntentModelProvider
 import com.u3coding.shaver.model.MessageStatus
 import com.u3coding.shaver.model.NormalChatContextManager
 import com.u3coding.shaver.model.Role
@@ -33,7 +40,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
-class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
+class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context) : ViewModel() {
+    private val localIntentModelProvider = LocalIntentModelProvider(applicationContext,
+        IntentFeatureExtractor())
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
     private val _events = MutableSharedFlow<ChatUiEvent>()
@@ -90,26 +99,44 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
         val message = input.trim()
         if (message.isBlank()) return
 
-        when (InputClassifier.classify(message)) {
-            InputType.NormalChat -> {
-                scheduler.submit(
-                    AgentTask.ChatTask(
-                        text = message,
-                        wifiSsid = wifiSsid
-                    )
-                )
-            }
+        val inputType = resolveInputType(message)
+        submitInputTask(inputType, message, wifiSsid)
+    }
 
-            InputType.CommandChat -> {
-                scheduler.submit(
-                    AgentTask.CommandTask(
-                        text = message,
-                        wifiSsid = wifiSsid
-                    )
-                )
+    private fun resolveInputType(message: String): InputType {
+        val localResult = localIntentModelProvider.predict(message)
+
+        if (localResult.confidence >= LOCAL_INTENT_CONFIDENCE_THRESHOLD) {
+            return when (localResult.intent) {
+                LocalIntent.NormalChat -> InputType.NormalChat
+                LocalIntent.DeviceControl,
+                LocalIntent.RuleGeneration -> InputType.CommandChat
             }
         }
+
+        return InputClassifier.classify(message)
     }
+
+    private fun submitInputTask(
+        inputType: InputType,
+        message: String,
+        wifiSsid: String?
+    ) {
+        val task = when (inputType) {
+            InputType.NormalChat -> AgentTask.ChatTask(
+                text = message,
+                wifiSsid = wifiSsid
+            )
+
+            InputType.CommandChat -> AgentTask.CommandTask(
+                text = message,
+                wifiSsid = wifiSsid
+            )
+        }
+
+        scheduler.submit(task)
+    }
+
     fun onSystemEvent(event: String, wifiSsid: String?) {
         scheduler.submit(
             AgentTask.SystemEventTask(
@@ -521,6 +548,7 @@ class ChatViewModel(val executor: ActionExecutor) : ViewModel() {
     }
 
     companion object {
+        private const val LOCAL_INTENT_CONFIDENCE_THRESHOLD = 0.7f
         private const val OPEN_BLUETOOTH_CMD = "打开蓝牙"
         private const val CLOSE_BLUETOOTH_CMD = "关闭蓝牙"
     }

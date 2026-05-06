@@ -81,7 +81,7 @@ class MainActivity : AppCompatActivity() {
         RuleRepo.init(applicationContext)
         ruleEngine = RuleEngine(this)
         executor = ActionExecutor(applicationContext)
-        val factory = ChatViewModelFactory(executor)
+        val factory = ChatViewModelFactory(executor,applicationContext)
         viewModel = ViewModelProvider(this, factory)[ChatViewModel::class.java]
         wifiProvider = WifiProvider(this)
         permissionHelper = PermissionRequestHelper(this)
