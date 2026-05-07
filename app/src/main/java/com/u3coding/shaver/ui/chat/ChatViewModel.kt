@@ -30,6 +30,9 @@ import com.u3coding.shaver.model.MessageStatus
 import com.u3coding.shaver.model.NormalChatContextManager
 import com.u3coding.shaver.model.Role
 import com.u3coding.shaver.model.UiMessage
+import com.u3coding.shaver.model.runtime.IntentType
+import com.u3coding.shaver.model.runtime.LocalModelRuntime
+import com.u3coding.shaver.model.runtime.TfliteLocalModelRuntime
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,8 +44,12 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
 class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context) : ViewModel() {
-    private val localIntentModelProvider = LocalIntentModelProvider(applicationContext,
-        IntentFeatureExtractor())
+    private val localModelRuntime: LocalModelRuntime = TfliteLocalModelRuntime(
+        LocalIntentModelProvider(
+            applicationContext,
+            IntentFeatureExtractor()
+        )
+    )
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
     private val _events = MutableSharedFlow<ChatUiEvent>()
@@ -104,13 +111,14 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
     }
 
     private fun resolveInputType(message: String): InputType {
-        val localResult = localIntentModelProvider.predict(message)
+        val localResult = localModelRuntime.classifyIntent(message)
 
         if (localResult.confidence >= LOCAL_INTENT_CONFIDENCE_THRESHOLD) {
             return when (localResult.intent) {
-                LocalIntent.NormalChat -> InputType.NormalChat
-                LocalIntent.DeviceControl,
-                LocalIntent.RuleGeneration -> InputType.CommandChat
+                IntentType.NORMAL_CHAT -> InputType.NormalChat
+                IntentType.DEVICE_CONTROL,
+                IntentType.RULE_CREATE -> InputType.CommandChat
+                else -> {InputClassifier.classify(message)}
             }
         }
 
