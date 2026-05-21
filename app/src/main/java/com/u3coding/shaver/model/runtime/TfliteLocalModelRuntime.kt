@@ -15,9 +15,13 @@ class TfliteLocalModelRuntime(
                 LocalIntent.NormalChat -> IntentType.NORMAL_CHAT
                 LocalIntent.DeviceControl -> IntentType.DEVICE_CONTROL
                 LocalIntent.RuleGeneration -> IntentType.RULE_CREATE
+                else -> { IntentType.NORMAL_CHAT}
             },
             confidence = result.confidence,
-            source = "tflite_intent_model"
+            source = "tflite_intent_model",
+            latencyMs = result.latencyMs,
+            backend = "CPU",
+            error = result.error
         )
     }
 

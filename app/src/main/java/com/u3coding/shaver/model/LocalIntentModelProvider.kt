@@ -80,13 +80,15 @@ class LocalIntentModelProvider(
             else -> LocalIntent.NormalChat
         }
 
-        return LocalIntentResult(intent, confidence)
+        return LocalIntentResult(
+            intent, confidence,
+        )
     }
 
     private fun fallbackResult(): LocalIntentResult {
         return LocalIntentResult(
             intent = LocalIntent.NormalChat,
-            confidence = 0f
+            confidence = 0f,
         )
     }
 

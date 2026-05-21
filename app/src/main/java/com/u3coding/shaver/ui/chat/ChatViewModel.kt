@@ -2,6 +2,7 @@ package com.u3coding.shaver.ui.chat
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
@@ -112,7 +113,16 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
 
     private fun resolveInputType(message: String): InputType {
         val localResult = localModelRuntime.classifyIntent(message)
-
+        Log.d(
+            "LocalIntentDecision",
+            "input=$message, " +
+                    "intent=${localResult.intent}, " +
+                    "confidence=${localResult.confidence}, " +
+                    "source=${localResult.source}, " +
+                    "backend=${localResult.backend}, " +
+                    "latency=${localResult.latencyMs}ms, " +
+                    "decision=${if (localResult.confidence >= LOCAL_INTENT_CONFIDENCE_THRESHOLD) "use_local" else "fallback"}"
+        )
         if (localResult.confidence >= LOCAL_INTENT_CONFIDENCE_THRESHOLD) {
             return when (localResult.intent) {
                 IntentType.NORMAL_CHAT -> InputType.NormalChat
