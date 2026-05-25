@@ -1,10 +1,7 @@
 package com.u3coding.shaver.ui.chat
 
-import android.app.Application
 import android.content.Context
 import android.util.Log
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.u3coding.shaver.data.remote.ApiProvider
@@ -25,13 +22,14 @@ import com.u3coding.shaver.action.rule.RuleRunResult
 import com.u3coding.shaver.action.parser.ToolCallParser
 import com.u3coding.shaver.model.CommandChatContextManager
 import com.u3coding.shaver.model.IntentFeatureExtractor
-import com.u3coding.shaver.model.LocalIntent
 import com.u3coding.shaver.model.LocalIntentModelProvider
 import com.u3coding.shaver.model.MessageStatus
 import com.u3coding.shaver.model.NormalChatContextManager
 import com.u3coding.shaver.model.Role
 import com.u3coding.shaver.model.UiMessage
+import com.u3coding.shaver.model.benchmark.LocalModelBenchmark
 import com.u3coding.shaver.model.runtime.IntentType
+import com.u3coding.shaver.model.runtime.LocalModelBackend
 import com.u3coding.shaver.model.runtime.LocalModelRuntime
 import com.u3coding.shaver.model.runtime.TfliteLocalModelRuntime
 import kotlinx.coroutines.Job
@@ -48,7 +46,8 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
     private val localModelRuntime: LocalModelRuntime = TfliteLocalModelRuntime(
         LocalIntentModelProvider(
             applicationContext,
-            IntentFeatureExtractor()
+            IntentFeatureExtractor(),
+            LocalModelBackend.GPU
         )
     )
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -73,6 +72,24 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
             handleSystemEventTask(task)
         }
     )
+    private fun runLocalModelBenchmark() {
+        viewModelScope.launch {
+            val results = LocalModelBenchmark(applicationContext).runAll()
+
+            results.forEach { result ->
+                Log.d(
+                    "LocalModelBenchmark",
+                    "backend=${result.backend}, " +
+                            "success=${result.success}, " +
+                            "firstRun=${result.firstRunMs}ms, " +
+                            "avg=${result.avgRunMs}ms, " +
+                            "min=${result.minRunMs}ms, " +
+                            "max=${result.maxRunMs}ms, " +
+                            "error=${result.error}"
+                )
+            }
+        }
+    }
     fun canSendMessage(
         input: String,
         hasBluetoothPermission: Boolean,

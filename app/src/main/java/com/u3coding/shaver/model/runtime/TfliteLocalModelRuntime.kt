@@ -20,7 +20,7 @@ class TfliteLocalModelRuntime(
             confidence = result.confidence,
             source = "tflite_intent_model",
             latencyMs = result.latencyMs,
-            backend = "CPU",
+            backend = result.backend,
             error = result.error
         )
     }
