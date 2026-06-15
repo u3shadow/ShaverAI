@@ -59,7 +59,7 @@ object ManualApplyNotification {
 
     private fun buildSceneText(applied: Boolean, sceneSsid: String?, eventType: String): String {
         if (!applied) return "\u672a\u5339\u914d\u5230\u914d\u7f6e"
-        val ssid = sceneSsid?.takeIf { it.isNotBlank() } ?: "\u672a\u77e5 Wi-Fi"
+        val ssid = sceneSsid?.takeIf { it.isNotBlank() } ?: "\u672a\u77e5\u65e0\u7ebf\u7f51"
         val actionText = if (RuleEventType.normalize(eventType) == RuleEventType.WIFI_DISCONNECTED) {
             "\u79bb\u5f00"
         } else {
@@ -69,7 +69,7 @@ object ManualApplyNotification {
     }
 
     private fun buildDetailText(applied: Boolean, actions: List<Action>): String {
-        if (!applied) return "\u8bf7\u5148\u4e3a\u5f53\u524d Wi-Fi \u914d\u7f6e\u89c4\u5219"
+        if (!applied) return "\u8bf7\u5148\u4e3a\u5f53\u524d\u65e0\u7ebf\u7f51\u914d\u7f6e\u89c4\u5219"
         val summary = actions
             .filterNot { it.isBluetoothAction() }
             .takeIf { it.isNotEmpty() }
@@ -112,10 +112,10 @@ object ManualApplyNotification {
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Shaver \u5feb\u901f\u5e94\u7528",
+            "\u573a\u666f\u52a9\u624b\u5feb\u901f\u5e94\u7528",
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "\u4e00\u952e\u68c0\u6d4b Wi-Fi \u5e76\u5e94\u7528\u573a\u666f\u914d\u7f6e"
+            description = "\u4e00\u952e\u68c0\u6d4b\u65e0\u7ebf\u7f51\u5e76\u5e94\u7528\u573a\u666f\u914d\u7f6e"
         }
         manager.createNotificationChannel(channel)
     }

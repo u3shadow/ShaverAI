@@ -38,10 +38,14 @@ class ChatMessageAdapter : RecyclerView.Adapter<ChatMessageAdapter.ChatMessageVi
         private val tvContent: TextView = itemView.findViewById(R.id.tvContent)
 
         fun bind(message: UiMessage) {
-            tvRole.text = message.role.name
+            tvRole.text = when (message.role) {
+                Role.USER -> "\u6211"
+                Role.ASSISTANT -> "\u52a9\u624b"
+                Role.SYSTEM -> "\u7cfb\u7edf"
+            }
 
             val content = if (message.role == Role.USER) {
-                "${message.content} [env: ${message.wifiSsid ?: "unknown"}]"
+                "${message.content} [\u73af\u5883\uff1a${message.wifiSsid ?: "\u672a\u77e5"}]"
             } else {
                 message.content
             }
