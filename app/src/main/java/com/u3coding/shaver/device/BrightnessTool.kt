@@ -27,11 +27,6 @@ class BrightnessTool(val context: Context) {
 
         Settings.System.putInt(
             context.contentResolver,
-            Settings.System.SCREEN_BRIGHTNESS_MODE,
-            Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
-        )
-        Settings.System.putInt(
-            context.contentResolver,
             Settings.System.SCREEN_BRIGHTNESS,
             brightness
         )
