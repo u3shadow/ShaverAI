@@ -95,7 +95,7 @@ class MainActivity : AppCompatActivity() {
     private var currentRuleSsid: String? = null
     private val changedConfigKeys = mutableSetOf<String>()
     private val envState = linkedMapOf(
-        "\u65e0\u7ebf\u7f51" to "\u672a\u77e5",
+        "Wi-Fi" to "\u672a\u77e5",
         KEY_CURRENT_BRIGHTNESS to "\u672a\u77e5",
         KEY_CURRENT_VOLUME to "\u672a\u77e5",
         KEY_CURRENT_BLUETOOTH to "\u672a\u77e5",
@@ -349,7 +349,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateDisplayedWifiSsid(ssid: String) {
-        envState["\u65e0\u7ebf\u7f51"] = ssid
+        envState["Wi-Fi"] = ssid
         tvWifiStatus.text = getString(R.string.current_wifi_format, ssid)
         renderEnvConfigList()
     }

@@ -31,7 +31,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="&#x573A;&#x666F;&#x52A9;&#x624B;"
+                android:text="Shaver"
                 android:textColor="@color/brand_topbar_text"
                 android:textSize="20sp"
                 android:textStyle="bold" />
@@ -66,7 +66,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:text="&#x65E0;&#x7EBF;&#x7F51;&#x573A;&#x666F;&#x81EA;&#x52A8;&#x5316;&#x52A9;&#x624B;"
+            android:text="Wi-Fi &#x573A;&#x666F;&#x81EA;&#x52A8;&#x5316;&#x52A9;&#x624B;"
             android:textColor="#BBD9F3"
             android:textSize="12sp" />
     </LinearLayout>
@@ -98,7 +98,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:lineSpacingExtra="2dp"
-            android:text="&#x2022; &#x5148;&#x8BF4;&#xFF1A;&#x628A;&#x5F53;&#x524D;&#x65E0;&#x7EBF;&#x7F51;&#x53EB;&#x505A;&#x5BB6;&#x000A;&#x2022; &#x518D;&#x8BF4;&#xFF1A;&#x8FDB;&#x5165;&#x5BB6;&#x7684;&#x65F6;&#x5019;&#xFF0C;&#x4EAE;&#x5EA6;&#x8C03;&#x5230; 80%&#x000A;&#x2022; &#x6216;&#x8BF4;&#xFF1A;&#x79BB;&#x5F00;&#x516C;&#x53F8;&#x7684;&#x65F6;&#x5019;&#xFF0C;&#x97F3;&#x91CF;&#x8C03;&#x5230; 20%"
+            android:text="&#x2022; &#x5148;&#x8BF4;&#xFF1A;&#x628A;&#x5F53;&#x524D; Wi-Fi &#x53EB;&#x505A;&#x5BB6;&#x000A;&#x2022; &#x518D;&#x8BF4;&#xFF1A;&#x8FDB;&#x5165;&#x5BB6;&#x7684;&#x65F6;&#x5019;&#xFF0C;&#x4EAE;&#x5EA6;&#x8C03;&#x5230; 80%&#x000A;&#x2022; &#x6216;&#x8BF4;&#xFF1A;&#x79BB;&#x5F00;&#x516C;&#x53F8;&#x7684;&#x65F6;&#x5019;&#xFF0C;&#x97F3;&#x91CF;&#x8C03;&#x5230; 20%"
             android:textColor="#AFCBE8"
             android:textSize="12sp" />
     </LinearLayout>

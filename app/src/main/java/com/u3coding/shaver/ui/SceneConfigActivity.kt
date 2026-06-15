@@ -61,7 +61,7 @@ class SceneConfigActivity : AppCompatActivity() {
         tvSceneSsid = findViewById(R.id.tvSceneSsid)
         tvAliasMissingHint = findViewById(R.id.tvAliasMissingHint)
         etSceneAlias = findViewById(R.id.etSceneAlias)
-        tvSceneSsid.text = "\u65e0\u7ebf\u7f51\u540d\u79f0\uff1a$ssid"
+        tvSceneSsid.text = "Wi-Fi \u540d\u79f0\uff1a$ssid"
         val alias = WifiAliasRepo.findAliasBySsid(ssid).orEmpty()
         findViewById<TextView>(R.id.tvSceneTitle).text = alias.ifBlank { ssid }
         etSceneAlias.setText(alias)
@@ -87,7 +87,7 @@ class SceneConfigActivity : AppCompatActivity() {
         val adapter = ArrayAdapter(
             this,
             R.layout.item_scene_spinner,
-            listOf("\u8fdb\u5165\u65e0\u7ebf\u7f51\u65f6", "\u79bb\u5f00\u65e0\u7ebf\u7f51\u65f6")
+            listOf("\u8fdb\u5165 Wi-Fi \u65f6", "\u79bb\u5f00 Wi-Fi \u65f6")
         )
         adapter.setDropDownViewResource(R.layout.item_scene_spinner_dropdown)
         spEventType.adapter = adapter
@@ -200,7 +200,7 @@ class SceneConfigActivity : AppCompatActivity() {
         }
         RuleRepo.replaceRules(ssid, currentEventType, actions)
         if (etSceneAlias.text?.toString()?.trim().isNullOrBlank()) {
-            Toast.makeText(this, "\u5efa\u8bae\u7ed9\u65e0\u7ebf\u7f51\u8bbe\u7f6e\u522b\u540d\uff0c\u4ee5\u540e\u53ef\u4ee5\u76f4\u63a5\u5bf9\u667a\u80fd\u52a9\u624b\u8bf4\u201c\u5bb6\u201d\u6216\u201c\u516c\u53f8\u201d", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "\u5efa\u8bae\u7ed9 Wi-Fi \u8bbe\u7f6e\u522b\u540d\uff0c\u4ee5\u540e\u53ef\u4ee5\u76f4\u63a5\u5bf9 AI \u8bf4\u201c\u5bb6\u201d\u6216\u201c\u516c\u53f8\u201d", Toast.LENGTH_LONG).show()
         }
         Toast.makeText(this, "\u914d\u7f6e\u5df2\u4fdd\u5b58", Toast.LENGTH_SHORT).show()
     }

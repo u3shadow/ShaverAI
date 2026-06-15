@@ -57,10 +57,10 @@ class OnboardingIllustrationView @JvmOverloads constructor(
     private fun drawAliasScreenshot(canvas: Canvas) {
         val screen = drawAppScreen(canvas)
         drawMainTopBar(canvas, screen)
-        val y = drawGuideMiniCard(canvas, screen, screen.top + dp(64f), "\u5148\u8bf4\uff1a\u628a\u5f53\u524d\u65e0\u7ebf\u7f51\u53eb\u505a\u5bb6")
+        val y = drawGuideMiniCard(canvas, screen, screen.top + dp(64f), "\u5148\u8bf4\uff1a\u628a\u5f53\u524d Wi-Fi \u53eb\u505a\u5bb6")
         drawConfigPanel(canvas, screen, y + dp(8f), "HUAWEI-5G-1234", listOf("\u522b\u540d \u5bb6", "\u4e0b\u6b21\u53ef\u76f4\u63a5\u8bf4\u201c\u5bb6\u201d"))
-        drawBubble(canvas, screen.left + dp(18f), screen.bottom - dp(150f), screen.width() * 0.78f, "\u628a\u5f53\u524d\u65e0\u7ebf\u7f51\u53eb\u505a\u5bb6", true)
-        drawBubble(canvas, screen.left + dp(18f), screen.bottom - dp(94f), screen.width() * 0.82f, "\u5df2\u628a\u8fd9\u4e2a\u65e0\u7ebf\u7f51\u8bbe\u4e3a\u201c\u5bb6\u201d", false)
+        drawBubble(canvas, screen.left + dp(18f), screen.bottom - dp(150f), screen.width() * 0.78f, "\u628a\u5f53\u524d Wi-Fi \u53eb\u505a\u5bb6", true)
+        drawBubble(canvas, screen.left + dp(18f), screen.bottom - dp(94f), screen.width() * 0.82f, "\u5df2\u628a\u8fd9\u4e2a Wi-Fi \u8bbe\u4e3a\u201c\u5bb6\u201d", false)
         drawInputBar(canvas, screen, "\u79bb\u5f00\u5bb6\u65f6\uff0c\u97f3\u91cf\u8c03\u5230 20%")
     }
 
@@ -76,12 +76,12 @@ class OnboardingIllustrationView @JvmOverloads constructor(
     private fun drawSceneManagerScreenshot(canvas: Canvas) {
         val screen = drawAppScreen(canvas)
         drawStatusBar(canvas, screen, "\u573a\u666f\u7ba1\u7406")
-        drawText(canvas, "\u65e0\u7ebf\u7f51\u573a\u666f\u7ba1\u7406", screen.left + dp(18f), screen.top + dp(58f), 20f, Color.rgb(234, 244, 255), true)
-        drawText(canvas, "\u7ba1\u7406\u4efb\u610f\u65e0\u7ebf\u7f51\u7684\u8fdb\u5165\u548c\u79bb\u5f00\u914d\u7f6e", screen.left + dp(18f), screen.top + dp(82f), 11f, Color.rgb(157, 187, 226), false)
-        drawButton(canvas, RectF(screen.left + dp(18f), screen.top + dp(102f), screen.centerX() - dp(4f), screen.top + dp(140f)), "\u6dfb\u52a0\u5f53\u524d\u65e0\u7ebf\u7f51", true)
+        drawText(canvas, "Wi-Fi \u573a\u666f\u7ba1\u7406", screen.left + dp(18f), screen.top + dp(58f), 20f, Color.rgb(234, 244, 255), true)
+        drawText(canvas, "\u7ba1\u7406\u4efb\u610f Wi-Fi \u7684\u8fdb\u5165\u548c\u79bb\u5f00\u914d\u7f6e", screen.left + dp(18f), screen.top + dp(82f), 11f, Color.rgb(157, 187, 226), false)
+        drawButton(canvas, RectF(screen.left + dp(18f), screen.top + dp(102f), screen.centerX() - dp(4f), screen.top + dp(140f)), "\u6dfb\u52a0\u5f53\u524d Wi-Fi", true)
         drawButton(canvas, RectF(screen.centerX() + dp(4f), screen.top + dp(102f), screen.right - dp(18f), screen.top + dp(140f)), "\u624b\u52a8\u6dfb\u52a0", false)
-        drawSceneCard(canvas, screen, screen.top + dp(160f), "\u5bb6", "\u65e0\u7ebf\u7f51\u540d\u79f0\uff1aHUAWEI-5G-1234", "\u8fdb\u5165\u914d\u7f6e 3 \u9879  |  \u79bb\u5f00\u914d\u7f6e 2 \u9879")
-        drawSceneCard(canvas, screen, screen.top + dp(240f), "\u516c\u53f8", "\u65e0\u7ebf\u7f51\u540d\u79f0\uff1a\u516c\u53f8\u7f51\u7edc", "\u8fdb\u5165\u914d\u7f6e 2 \u9879  |  \u79bb\u5f00\u914d\u7f6e 1 \u9879")
+        drawSceneCard(canvas, screen, screen.top + dp(160f), "\u5bb6", "Wi-Fi \u540d\u79f0\uff1aHUAWEI-5G-1234", "\u8fdb\u5165\u914d\u7f6e 3 \u9879  |  \u79bb\u5f00\u914d\u7f6e 2 \u9879")
+        drawSceneCard(canvas, screen, screen.top + dp(240f), "\u516c\u53f8", "Wi-Fi \u540d\u79f0\uff1a\u516c\u53f8\u7f51\u7edc", "\u8fdb\u5165\u914d\u7f6e 2 \u9879  |  \u79bb\u5f00\u914d\u7f6e 1 \u9879")
     }
 
     private fun drawAppScreen(canvas: Canvas): RectF {
@@ -106,13 +106,13 @@ class OnboardingIllustrationView @JvmOverloads constructor(
     }
 
     private fun drawMainTopBar(canvas: Canvas, screen: RectF) {
-        drawStatusBar(canvas, screen, "\u573a\u666f\u52a9\u624b")
+        drawStatusBar(canvas, screen, "Shaver")
         paint.color = Color.rgb(16, 43, 71)
         canvas.drawRect(screen.left, screen.top + dp(20f), screen.right, screen.top + dp(70f), paint)
-        drawText(canvas, "\u573a\u666f\u52a9\u624b", screen.left + dp(15f), screen.top + dp(48f), 16f, Color.rgb(234, 245, 255), true)
+        drawText(canvas, "Shaver", screen.left + dp(15f), screen.top + dp(48f), 16f, Color.rgb(234, 245, 255), true)
         drawSmallButton(canvas, screen.right - dp(112f), screen.top + dp(32f), "\u4f7f\u7528\u6307\u5357")
         drawSmallButton(canvas, screen.right - dp(56f), screen.top + dp(32f), "\u573a\u666f")
-        drawText(canvas, "\u65e0\u7ebf\u7f51\u573a\u666f\u81ea\u52a8\u5316\u52a9\u624b", screen.left + dp(15f), screen.top + dp(64f), 9f, Color.rgb(187, 217, 243), false)
+        drawText(canvas, "Wi-Fi \u573a\u666f\u81ea\u52a8\u5316\u52a9\u624b", screen.left + dp(15f), screen.top + dp(64f), 9f, Color.rgb(187, 217, 243), false)
     }
 
     private fun drawStatusBar(canvas: Canvas, screen: RectF, title: String) {
@@ -123,7 +123,7 @@ class OnboardingIllustrationView @JvmOverloads constructor(
         drawText(canvas, "\u4fe1\u53f7", screen.right - dp(42f), screen.top + dp(17f), 8f, Color.rgb(205, 235, 255), true)
     }
 
-    private fun drawGuideMiniCard(canvas: Canvas, screen: RectF, top: Float, text: String = "\u5148\u8bf4\uff1a\u628a\u5f53\u524d\u65e0\u7ebf\u7f51\u53eb\u505a\u5bb6"): Float {
+    private fun drawGuideMiniCard(canvas: Canvas, screen: RectF, top: Float, text: String = "\u5148\u8bf4\uff1a\u628a\u5f53\u524d Wi-Fi \u53eb\u505a\u5bb6"): Float {
         val rect = RectF(screen.left + dp(12f), top, screen.right - dp(12f), top + dp(58f))
         paint.color = Color.argb(235, 23, 49, 77)
         canvas.drawRoundRect(rect, dp(14f), dp(14f), paint)
@@ -136,7 +136,7 @@ class OnboardingIllustrationView @JvmOverloads constructor(
         val rect = RectF(screen.left + dp(12f), top, screen.right - dp(12f), top + dp(106f))
         paint.color = Color.argb(235, 23, 49, 77)
         canvas.drawRoundRect(rect, dp(16f), dp(16f), paint)
-        drawText(canvas, "\u5f53\u524d\u65e0\u7ebf\u7f51\uff1a$ssid", rect.left + dp(10f), rect.top + dp(20f), 10f, Color.rgb(234, 244, 255), true)
+        drawText(canvas, "\u5f53\u524d Wi-Fi\uff1a$ssid", rect.left + dp(10f), rect.top + dp(20f), 10f, Color.rgb(234, 244, 255), true)
         drawText(canvas, "\u73af\u5883\u914d\u7f6e\u9762\u677f", rect.left + dp(10f), rect.top + dp(42f), 9f, Color.rgb(157, 187, 226), false)
         rows.forEachIndexed { index, label ->
             val rowTop = rect.top + dp(52f + index * 23f)
@@ -180,16 +180,16 @@ class OnboardingIllustrationView @JvmOverloads constructor(
     private fun drawHomeStatus(canvas: Canvas, phone: RectF) {
         val screen = phone.insetCopy(dp(9f), dp(18f))
         drawText(canvas, "12:30", screen.left + dp(16f), screen.top + dp(22f), 9f, Color.WHITE, true)
-        drawText(canvas, "\u65e0\u7ebf", screen.right - dp(48f), screen.top + dp(22f), 9f, Color.WHITE, true)
+        drawText(canvas, "Wi-Fi", screen.right - dp(48f), screen.top + dp(22f), 9f, Color.WHITE, true)
     }
 
     private fun drawAppIcons(canvas: Canvas, phone: RectF) {
         val screen = phone.insetCopy(dp(9f), dp(18f))
-        val labels = listOf("\u7535\u8bdd", "\u804a\u5929", "\u573a\u666f", "\u5de5\u5177")
+        val labels = listOf("\u7535\u8bdd", "\u804a\u5929", "Shaver", "\u5de5\u5177")
         labels.forEachIndexed { index, label ->
             val left = screen.left + dp(26f + index * 48f)
             val top = screen.bottom - dp(86f)
-            paint.color = if (label == "\u573a\u666f") Color.rgb(33, 184, 255) else Color.argb(130, 234, 244, 255)
+            paint.color = if (label == "Shaver") Color.rgb(33, 184, 255) else Color.argb(130, 234, 244, 255)
             canvas.drawRoundRect(RectF(left, top, left + dp(30f), top + dp(30f)), dp(9f), dp(9f), paint)
             drawText(canvas, label, left - dp(2f), top + dp(45f), 7f, Color.WHITE, false)
         }
@@ -202,8 +202,8 @@ class OnboardingIllustrationView @JvmOverloads constructor(
         canvas.drawRoundRect(rect, dp(22f), dp(22f), paint)
         paint.color = Color.rgb(98, 245, 154)
         canvas.drawCircle(rect.left + dp(45f), rect.centerY(), dp(27f), paint)
-        drawText(canvas, "\u667a\u80fd", rect.left + dp(22f), rect.centerY() + dp(7f), 13f, Color.rgb(8, 21, 37), true)
-        drawText(canvas, "\u65e0\u7ebf\u7f51\u573a\u666f\u5f00\u5173", rect.left + dp(84f), rect.top + dp(38f), 13f, Color.WHITE, true)
+        drawText(canvas, "AI", rect.left + dp(31f), rect.centerY() + dp(8f), 19f, Color.rgb(8, 21, 37), true)
+        drawText(canvas, "Wi-Fi \u573a\u666f\u5f00\u5173", rect.left + dp(84f), rect.top + dp(38f), 13f, Color.WHITE, true)
         drawText(canvas, "\u70b9\u51fb\u5e94\u7528\u5f53\u524d\u5168\u5c40\u914d\u7f6e", rect.left + dp(84f), rect.top + dp(66f), 9f, Color.rgb(175, 203, 232), false)
     }
 
@@ -212,7 +212,7 @@ class OnboardingIllustrationView @JvmOverloads constructor(
         val sheet = RectF(screen.left, screen.bottom - dp(132f), screen.right, screen.bottom)
         paint.color = Color.argb(238, 234, 244, 255)
         canvas.drawRoundRect(sheet, dp(22f), dp(22f), paint)
-        drawText(canvas, "\u957f\u6309\u684c\u9762 > \u5c0f\u7ec4\u4ef6 > \u573a\u666f\u52a9\u624b", sheet.left + dp(18f), sheet.top + dp(34f), 12f, Color.rgb(17, 53, 65), true)
+        drawText(canvas, "\u957f\u6309\u684c\u9762 > \u5c0f\u7ec4\u4ef6 > Shaver", sheet.left + dp(18f), sheet.top + dp(34f), 12f, Color.rgb(17, 53, 65), true)
         drawText(canvas, "\u6dfb\u52a0\u540e\uff0c\u4ee5\u540e\u70b9\u4e00\u4e0b\u5c31\u80fd\u6267\u884c", sheet.left + dp(18f), sheet.top + dp(62f), 9f, Color.rgb(77, 111, 124), false)
         drawButton(canvas, RectF(sheet.left + dp(18f), sheet.top + dp(78f), sheet.right - dp(18f), sheet.top + dp(110f)), "\u6dfb\u52a0\u5230\u684c\u9762", true, 10f)
     }

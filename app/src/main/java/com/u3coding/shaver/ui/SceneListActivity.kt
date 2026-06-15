@@ -32,7 +32,7 @@ class SceneListActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnAddCurrentWifi).setOnClickListener {
             val ssid = wifiProvider.getCurrentWifiSsid()
             if (ssid.isNullOrBlank()) {
-                Toast.makeText(this, "\u672a\u8bfb\u53d6\u5230\u5f53\u524d\u65e0\u7ebf\u7f51", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "\u672a\u8bfb\u53d6\u5230\u5f53\u524d Wi-Fi", Toast.LENGTH_SHORT).show()
             } else {
                 openConfig(ssid)
             }
@@ -78,7 +78,7 @@ class SceneListActivity : AppCompatActivity() {
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         }
         val detail = TextView(this).apply {
-            text = "\u65e0\u7ebf\u7f51\u540d\u79f0\uff1a$ssid\n${buildSceneSummary(ssid)}"
+            text = "Wi-Fi \u540d\u79f0\uff1a$ssid\n${buildSceneSummary(ssid)}"
             setTextColor(0xFF4D6F7C.toInt())
             textSize = 13f
         }
@@ -95,16 +95,16 @@ class SceneListActivity : AppCompatActivity() {
 
     private fun showManualAddDialog() {
         val input = EditText(this).apply {
-            hint = "\u8bf7\u8f93\u5165\u65e0\u7ebf\u7f51\u540d\u79f0"
+            hint = "\u8bf7\u8f93\u5165 Wi-Fi \u540d\u79f0"
             setSingleLine(true)
         }
         AlertDialog.Builder(this)
-            .setTitle("\u624b\u52a8\u6dfb\u52a0\u65e0\u7ebf\u7f51\u573a\u666f")
+            .setTitle("\u624b\u52a8\u6dfb\u52a0 Wi-Fi \u573a\u666f")
             .setView(input)
             .setPositiveButton("\u786e\u5b9a") { _, _ ->
                 val ssid = input.text?.toString()?.trim().orEmpty()
                 if (ssid.isBlank()) {
-                    Toast.makeText(this, "\u8bf7\u8f93\u5165\u65e0\u7ebf\u7f51\u540d\u79f0", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "\u8bf7\u8f93\u5165 Wi-Fi \u540d\u79f0", Toast.LENGTH_SHORT).show()
                 } else {
                     openConfig(ssid)
                 }
