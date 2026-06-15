@@ -3,9 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS"/>
     <uses-permission
         android:name="android.permission.NEARBY_WIFI_DEVICES"
@@ -33,6 +36,26 @@
                 </category>
             </intent-filter>
         </activity>
+        <activity
+            android:name="com.u3coding.shaver.ui.ManualApplyProxyActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:theme="@style/Theme.Shaver.TransparentNoUi" />
+
+        <receiver
+            android:name="com.u3coding.shaver.widget.ManualApplyWidgetProvider"
+            android:exported="true"
+            android:label="@string/manual_apply_widget_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.appwidget.action.APPWIDGET_ENABLED" />
+                <action android:name="android.appwidget.action.APPWIDGET_DISABLED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/manual_apply_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

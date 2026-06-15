@@ -1,5 +1,14 @@
 package com.u3coding.shaver.ui
 
+import android.Manifest
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import androidx.activity.result.contract.ActivityResultContracts
+
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
@@ -27,9 +36,13 @@ import com.u3coding.shaver.R
 import com.u3coding.shaver.action.model.Action
 import com.u3coding.shaver.action.executor.ActionExecutor
 import com.u3coding.shaver.action.rule.RuleEngine
+import com.u3coding.shaver.action.rule.RuleEventType
 import com.u3coding.shaver.action.rule.RuleRepo
 import com.u3coding.shaver.action.rule.RuleRunResult
+import com.u3coding.shaver.device.WifiSceneStateStore
 import com.u3coding.shaver.device.WifiProvider
+import com.u3coding.shaver.notification.ManualApplyNotification
+import com.u3coding.shaver.widget.ManualApplyWidgetProvider
 import com.u3coding.shaver.ui.adapter.ChatMessageAdapter
 import com.u3coding.shaver.ui.adapter.EnvConfigAdapter
 import com.u3coding.shaver.ui.chat.ChatUiEvent
@@ -43,9 +56,14 @@ import kotlin.math.max
 
 class MainActivity : AppCompatActivity() {
 
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     private lateinit var executor: ActionExecutor
     private lateinit var viewModel: ChatViewModel
     private lateinit var wifiProvider: WifiProvider
+    private lateinit var wifiSceneStateStore: WifiSceneStateStore
     private lateinit var permissionHelper: PermissionRequestHelper
     private lateinit var inputEditText: EditText
     private lateinit var ruleEngine: RuleEngine
@@ -58,15 +76,29 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rvChat: RecyclerView
     private lateinit var chatAdapter: ChatMessageAdapter
     private lateinit var envConfigAdapter: EnvConfigAdapter
+    private var connectivityManager: ConnectivityManager? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private val wifiCheckHandler = Handler(Looper.getMainLooper())
+    private val disconnectedWifiCheck = Runnable {
+        if (wifiProvider.getCurrentWifiSsid().isNullOrBlank()) {
+            runDisconnectedWifiScene()
+        } else {
+            onWifiMaybeChanged()
+        }
+    }
 
     private var input: String = ""
     private var lastHandledActionVersion: Long = -1L
+    private var currentRuleSsid: String? = null
     private val changedConfigKeys = mutableSetOf<String>()
     private val envState = linkedMapOf(
         "Wi-Fi" to "unknown",
-        "亮度" to "unknown",
-        "音量" to "unknown",
-        "蓝牙" to "unknown"
+        KEY_CURRENT_BRIGHTNESS to "unknown",
+        KEY_CURRENT_VOLUME to "unknown",
+        KEY_CURRENT_BLUETOOTH to "unknown",
+        KEY_DISCONNECT_BRIGHTNESS to "\u672a\u914d\u7f6e",
+        KEY_DISCONNECT_VOLUME to "\u672a\u914d\u7f6e",
+        KEY_DISCONNECT_BLUETOOTH to "\u672a\u914d\u7f6e"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,7 +116,11 @@ class MainActivity : AppCompatActivity() {
         val factory = ChatViewModelFactory(executor,applicationContext)
         viewModel = ViewModelProvider(this, factory)[ChatViewModel::class.java]
         wifiProvider = WifiProvider(this)
+        wifiSceneStateStore = WifiSceneStateStore(this)
         permissionHelper = PermissionRequestHelper(this)
+        connectivityManager = getSystemService(ConnectivityManager::class.java)
+        requestNotificationPermissionIfNeeded()
+        ManualApplyWidgetProvider.refreshAll(this)
 
         tvWifiStatus = findViewById(R.id.tvWifiStatus)
         pbEnvExecLoading = findViewById(R.id.pbEnvExecLoading)
@@ -122,6 +158,7 @@ class MainActivity : AppCompatActivity() {
                         lastHandledActionVersion = state.actionUpdateVersion
                         applyActionsToEnvState(actions)
                         renderEnvConfigList()
+                        notifyManualApplyResult(true, actions)
                         refreshChatList()
                         setExecutionSuccess()
                     }
@@ -161,6 +198,12 @@ class MainActivity : AppCompatActivity() {
         onWifiMaybeChanged()
     }
 
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
     private fun setupInsets() {
         val root = findViewById<View>(R.id.rootContainer)
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
@@ -187,6 +230,17 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         onWifiMaybeChanged()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        registerWifiStateCallback()
+    }
+
+    override fun onStop() {
+        wifiCheckHandler.removeCallbacks(disconnectedWifiCheck)
+        unregisterWifiStateCallback()
+        super.onStop()
     }
 
     private fun trySendMessage() {
@@ -222,16 +276,53 @@ class MainActivity : AppCompatActivity() {
 
         setExecutionRunning()
 
-        val ssid = wifiProvider.getCurrentWifiSsid() ?: return
+        val ssid = wifiProvider.getCurrentWifiSsid()
+        if (ssid.isNullOrBlank()) {
+            scheduleDisconnectedWifiCheck()
+            return
+        }
 
+        wifiCheckHandler.removeCallbacks(disconnectedWifiCheck)
+        currentRuleSsid = ssid
+        wifiSceneStateStore.saveLastConnectedSsid(ssid)
         updateDisplayedWifiSsid(ssid)
+        loadDisconnectPlanForSsid(ssid)
 
         viewModel.onSystemEvent(
             event = "wifi_changed",
             wifiSsid = ssid
         )
-        val result = ruleEngine.run(ssid)
+        val result = ruleEngine.run(ssid, RuleEventType.WIFI_CONNECTED)
 
+        updateEnvFromRuleResult(result)
+        renderEnvConfigList()
+        viewModel.onRuleRunResult(result)
+    }
+
+    private fun scheduleDisconnectedWifiCheck() {
+        wifiCheckHandler.removeCallbacks(disconnectedWifiCheck)
+        wifiCheckHandler.postDelayed(disconnectedWifiCheck, DISCONNECT_CONFIRM_DELAY_MS)
+    }
+
+    private fun runDisconnectedWifiScene() {
+        val lastSsid = wifiSceneStateStore.getLastConnectedSsid()
+        if (lastSsid.isNullOrBlank()) {
+            updateDisplayedWifiSsid("not connected")
+            changedConfigKeys.clear()
+            renderEnvConfigList()
+            setExecutionFailed()
+            notifyManualApplyResult(false)
+            return
+        }
+
+        currentRuleSsid = lastSsid
+        updateDisplayedWifiSsid("$lastSsid (disconnected)")
+        loadDisconnectPlanForSsid(lastSsid)
+        viewModel.onSystemEvent(
+            event = "wifi_disconnected",
+            wifiSsid = lastSsid
+        )
+        val result = ruleEngine.run(lastSsid, RuleEventType.WIFI_DISCONNECTED)
         updateEnvFromRuleResult(result)
         renderEnvConfigList()
         viewModel.onRuleRunResult(result)
@@ -243,6 +334,18 @@ class MainActivity : AppCompatActivity() {
         renderEnvConfigList()
     }
 
+
+    private fun notifyManualApplyResult(applied: Boolean, actions: List<Action> = emptyList()) {
+        val firstAction = actions.firstOrNull()
+        ManualApplyNotification.showResult(
+            context = this,
+            applied = applied,
+            actions = actions,
+            sceneSsid = firstAction?.trigger ?: currentRuleSsid,
+            eventType = firstAction?.eventType ?: RuleEventType.WIFI_CONNECTED
+        )
+        ManualApplyWidgetProvider.refreshAll(this)
+    }
     private fun updateEnvFromRuleResult(result: RuleRunResult) {
         when (result) {
             is RuleRunResult.Success -> {
@@ -252,14 +355,17 @@ class MainActivity : AppCompatActivity() {
             is RuleRunResult.NoRule -> {
                 changedConfigKeys.clear()
                 setExecutionFailed()
+                notifyManualApplyResult(false)
             }
             is RuleRunResult.SkippedDuplicate -> {
                 changedConfigKeys.clear()
                 setExecutionFailed()
+                notifyManualApplyResult(false)
             }
             is RuleRunResult.Failed -> {
                 changedConfigKeys.clear()
                 setExecutionFailed()
+                notifyManualApplyResult(false)
             }
         }
     }
@@ -267,27 +373,60 @@ class MainActivity : AppCompatActivity() {
     private fun applyActionsToEnvState(actions: List<Action>) {
         changedConfigKeys.clear()
         actions.forEach { action ->
+            if (RuleEventType.normalize(action.eventType) == RuleEventType.WIFI_DISCONNECTED) {
+                applyDisconnectPlanAction(action, highlighted = true)
+                return@forEach
+            }
             when (action.operation) {
                 "set_brightness" -> {
-                    envState["亮度"] = "${action.params["value"]}%"
-                    changedConfigKeys.add("亮度")
+                    envState[KEY_CURRENT_BRIGHTNESS] = "${action.params["value"]}%"
+                    changedConfigKeys.add(KEY_CURRENT_BRIGHTNESS)
                 }
                 "set_volume" -> {
-                    envState["音量"] = "${action.params["value"]}%"
-                    changedConfigKeys.add("音量")
+                    envState[KEY_CURRENT_VOLUME] = "${action.params["value"]}%"
+                    changedConfigKeys.add(KEY_CURRENT_VOLUME)
                 }
                 "open_bluetooth" -> {
-                    envState["蓝牙"] = "开启"
-                    changedConfigKeys.add("蓝牙")
+                    envState[KEY_CURRENT_BLUETOOTH] = "On"
+                    changedConfigKeys.add(KEY_CURRENT_BLUETOOTH)
                 }
                 "close_bluetooth" -> {
-                    envState["蓝牙"] = "关闭"
-                    changedConfigKeys.add("蓝牙")
+                    envState[KEY_CURRENT_BLUETOOTH] = "Off"
+                    changedConfigKeys.add(KEY_CURRENT_BLUETOOTH)
                 }
             }
         }
     }
 
+    private fun loadDisconnectPlanForSsid(ssid: String) {
+        envState[KEY_DISCONNECT_BRIGHTNESS] = "\u672a\u914d\u7f6e"
+        envState[KEY_DISCONNECT_VOLUME] = "\u672a\u914d\u7f6e"
+        envState[KEY_DISCONNECT_BLUETOOTH] = "\u672a\u914d\u7f6e"
+        RuleRepo.getRules(ssid, RuleEventType.WIFI_DISCONNECTED).forEach { action ->
+            applyDisconnectPlanAction(action, highlighted = false)
+        }
+    }
+
+    private fun applyDisconnectPlanAction(action: Action, highlighted: Boolean) {
+        when (action.operation) {
+            "set_brightness" -> {
+                envState[KEY_DISCONNECT_BRIGHTNESS] = "${action.params["value"]}%"
+                if (highlighted) changedConfigKeys.add(KEY_DISCONNECT_BRIGHTNESS)
+            }
+            "set_volume" -> {
+                envState[KEY_DISCONNECT_VOLUME] = "${action.params["value"]}%"
+                if (highlighted) changedConfigKeys.add(KEY_DISCONNECT_VOLUME)
+            }
+            "open_bluetooth" -> {
+                envState[KEY_DISCONNECT_BLUETOOTH] = "On"
+                if (highlighted) changedConfigKeys.add(KEY_DISCONNECT_BLUETOOTH)
+            }
+            "close_bluetooth" -> {
+                envState[KEY_DISCONNECT_BLUETOOTH] = "Off"
+                if (highlighted) changedConfigKeys.add(KEY_DISCONNECT_BLUETOOTH)
+            }
+        }
+    }
     private fun renderEnvConfigList() {
         val list = envState.map { (key, value) ->
             EnvConfigItem(
@@ -313,11 +452,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setExecutionSuccess() {
-        showExecutionResult("✓", "#62F59A")
+        showExecutionResult("OK", "#62F59A")
     }
 
     private fun setExecutionFailed() {
-        showExecutionResult("✕", "#FF5D5D")
+        showExecutionResult("X", "#FF5D5D")
     }
 
     private fun showExecutionResult(symbol: String, colorHex: String) {
@@ -327,6 +466,54 @@ class MainActivity : AppCompatActivity() {
         tvEnvExecResult.visibility = View.VISIBLE
         tvEnvExecResult.alpha = 0f
         tvEnvExecResult.animate().alpha(1f).setDuration(220).start()
+    }
+
+    private fun registerWifiStateCallback() {
+        if (networkCallback != null) return
+        val manager = connectivityManager ?: return
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                runOnUiThread { onWifiMaybeChanged() }
+            }
+
+            override fun onLost(network: Network) {
+                runOnUiThread { onWifiMaybeChanged() }
+            }
+
+            override fun onCapabilitiesChanged(
+                network: Network,
+                networkCapabilities: NetworkCapabilities
+            ) {
+                if (networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                    runOnUiThread { onWifiMaybeChanged() }
+                }
+            }
+        }
+        try {
+            manager.registerDefaultNetworkCallback(networkCallback!!)
+        } catch (_: Exception) {
+            networkCallback = null
+        }
+    }
+
+    private fun unregisterWifiStateCallback() {
+        val callback = networkCallback ?: return
+        val manager = connectivityManager ?: return
+        try {
+            manager.unregisterNetworkCallback(callback)
+        } catch (_: Exception) {
+        }
+        networkCallback = null
+    }
+
+    companion object {
+        private const val DISCONNECT_CONFIRM_DELAY_MS = 1500L
+        private const val KEY_CURRENT_BRIGHTNESS = "\u5f53\u524d\u4eae\u5ea6"
+        private const val KEY_CURRENT_VOLUME = "\u5f53\u524d\u97f3\u91cf"
+        private const val KEY_CURRENT_BLUETOOTH = "\u5f53\u524d\u84dd\u7259"
+        private const val KEY_DISCONNECT_BRIGHTNESS = "\u65ad\u5f00\u540e\u4eae\u5ea6"
+        private const val KEY_DISCONNECT_VOLUME = "\u65ad\u5f00\u540e\u97f3\u91cf"
+        private const val KEY_DISCONNECT_BLUETOOTH = "\u65ad\u5f00\u540e\u84dd\u7259"
     }
 
     override fun onRequestPermissionsResult(
@@ -346,6 +533,7 @@ class MainActivity : AppCompatActivity() {
             onWifiDenied = {
                 Toast.makeText(this, getString(R.string.wifi_permission_denied), Toast.LENGTH_SHORT).show()
                 setExecutionFailed()
+                notifyManualApplyResult(false)
             }
         )
     }

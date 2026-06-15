@@ -1,30 +1,36 @@
-﻿<resources>
+<resources>
     <string name="app_name">Shaver</string>
-
-    <string name="chat_input_hint">请输入内容</string>
-    <string name="send">发送</string>
-    <string name="current_wifi_unknown">当前 Wi-Fi: unknown</string>
-    <string name="current_wifi_format">当前 Wi-Fi: %1$s</string>
-    <string name="env_config_title">环境配置实时面板</string>
-
-    <string name="open_settings">打开设置</string>
-    <string name="settings_title">设置</string>
-    <string name="save">保存</string>
-    <string name="save_success">设置已保存到数据库</string>
-    <string name="settings_auto_applied">已自动应用已保存的设置</string>
-
-    <string name="wifi_id_label">当前连接 Wi-Fi ID</string>
-    <string name="wifi_id_hint">未获取到 Wi-Fi，请手动输入</string>
-    <string name="read_current_wifi">读取当前 Wi-Fi</string>
-    <string name="read_wifi_failed">无法读取当前 Wi-Fi ID</string>
-    <string name="wifi_permission_denied">未授予 Wi-Fi 读取权限</string>
-    <string name="location_service_required">请先打开系统定位开关</string>
-    <string name="write_settings_not_granted">未授予修改系统设置权限，亮度设置可能仅在应用内生效</string>
-
-    <string name="notification_volume_label">通知音量</string>
-    <string name="ringtone_volume_label">铃声音量</string>
-    <string name="brightness_label">屏幕亮度</string>
-    <string name="auto_brightness_label">自动亮度</string>
-    <string name="grant_write_settings">去授权系统设置</string>
+    <string name="chat_input_hint">Enter message</string>
+    <string name="send">Send</string>
+    <string name="current_wifi_unknown">Current Wi-Fi: unknown</string>
+    <string name="current_wifi_format">Current Wi-Fi: %1$s</string>
+    <string name="env_config_title">Environment config panel</string>
+    <string name="open_settings">Open settings</string>
+    <string name="settings_title">Settings</string>
+    <string name="save">Save</string>
+    <string name="save_success">Settings saved</string>
+    <string name="settings_auto_applied">Saved settings applied</string>
+    <string name="wifi_id_label">Current Wi-Fi ID</string>
+    <string name="wifi_id_hint">Wi-Fi unavailable, enter manually</string>
+    <string name="read_current_wifi">Read current Wi-Fi</string>
+    <string name="read_wifi_failed">Unable to read current Wi-Fi ID</string>
+    <string name="wifi_permission_denied">Wi-Fi permission denied</string>
+    <string name="location_service_required">Please enable location service first</string>
+    <string name="write_settings_not_granted">Write settings permission is not granted</string>
+    <string name="notification_volume_label">Notification volume</string>
+    <string name="ringtone_volume_label">Ringtone volume</string>
+    <string name="brightness_label">Screen brightness</string>
+    <string name="auto_brightness_label">Auto brightness</string>
+    <string name="grant_write_settings">Grant system settings permission</string>
     <string name="progress_percent">%1$d%%</string>
+    <string name="manual_apply_widget_title">Wi-Fi &#x573A;&#x666F;&#x5F00;&#x5173;</string>
+    <string name="manual_shortcut_short">&#x68C0;&#x6D4B;</string>
+    <string name="manual_apply_no_match">&#x672A;&#x5339;&#x914D;&#x5230;&#x914D;&#x7F6E;</string>
+    <string name="manual_apply_success_summary">&#x5DF2;&#x5E94;&#x7528;&#xFF1A;%1$s</string>
+    <string name="change_item_brightness">&#x4EAE;&#x5EA6;</string>
+    <string name="change_item_volume">&#x97F3;&#x91CF;</string>
+    <string name="change_item_bluetooth">&#x84DD;&#x7259;</string>
+    <string name="change_item_none">&#x65E0;&#x53D8;&#x66F4;</string>
+    <string name="manual_apply_channel_name">Shaver &#x5FEB;&#x901F;&#x5E94;&#x7528;</string>
+    <string name="manual_apply_channel_desc">&#x4E00;&#x952E;&#x68C0;&#x6D4B; Wi-Fi &#x5E76;&#x5E94;&#x7528;&#x573A;&#x666F;&#x914D;&#x7F6E;</string>
 </resources>
