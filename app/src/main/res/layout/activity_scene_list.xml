@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_main_chat"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingLeft="16dp"
+        android:paddingTop="48dp"
+        android:paddingRight="16dp"
+        android:paddingBottom="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="&#x65E0;&#x7EBF;&#x7F51;&#x573A;&#x666F;&#x7BA1;&#x7406;"
+            android:textColor="#EAF4FF"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="&#x7BA1;&#x7406;&#x4EFB;&#x610F;&#x65E0;&#x7EBF;&#x7F51;&#x7684;&#x8FDB;&#x5165;&#x548C;&#x79BB;&#x5F00;&#x914D;&#x7F6E;"
+            android:textColor="#9DBBE2"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/bg_panel"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="&#x53EF;&#x4EE5;&#x76F4;&#x63A5;&#x7528;&#x667A;&#x80FD;&#x52A9;&#x624B;&#x8BBE;&#x7F6E;&#x522B;&#x540D;"
+                android:textColor="#EAF4FF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:lineSpacingExtra="2dp"
+                android:text="&#x56DE;&#x5230;&#x804A;&#x5929;&#x9875;&#xFF0C;&#x4F60;&#x53EF;&#x4EE5;&#x8BF4;&#x201C;&#x628A;&#x5F53;&#x524D;&#x65E0;&#x7EBF;&#x7F51;&#x53EB;&#x505A;&#x5BB6;&#x201D;&#x3002;&#x4E4B;&#x540E;&#x5C31;&#x80FD;&#x76F4;&#x63A5;&#x8BF4;&#xFF1A;&#x8FDB;&#x5165;&#x5BB6;&#x65F6;&#x4EAE;&#x5EA6;&#x8C03;&#x5230; 80%&#xFF0C;&#x79BB;&#x5F00;&#x5BB6;&#x65F6;&#x97F3;&#x91CF;&#x8C03;&#x5230; 20%&#x3002;"
+                android:textColor="#AFCBE8"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnAddCurrentWifi"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_send_button"
+                android:text="&#x6DFB;&#x52A0;&#x5F53;&#x524D;&#x65E0;&#x7EBF;&#x7F51;"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btnAddManualWifi"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_option_inactive"
+                android:text="&#x624B;&#x52A8;&#x6DFB;&#x52A0;"
+                android:textAllCaps="false"
+                android:textColor="#EAF4FF" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/sceneListContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical" />
+
+        <TextView
+            android:id="@+id/tvEmptyScenes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="64dp"
+            android:gravity="center"
+            android:text="&#x8FD8;&#x6CA1;&#x6709;&#x4FDD;&#x5B58;&#x8FC7;&#x65E0;&#x7EBF;&#x7F51;&#x573A;&#x666F;"
+            android:textColor="#9DBBE2"
+            android:textSize="16sp"
+            android:visibility="gone" />
+    </LinearLayout>
+</ScrollView>

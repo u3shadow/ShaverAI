@@ -42,6 +42,18 @@
             android:exported="false"
             android:noHistory="true"
             android:theme="@style/Theme.Shaver.TransparentNoUi" />
+        <activity
+            android:name="com.u3coding.shaver.ui.SceneListActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+        <activity
+            android:name="com.u3coding.shaver.ui.SceneConfigActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+        <activity
+            android:name="com.u3coding.shaver.ui.OnboardingActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
 
         <receiver
             android:name="com.u3coding.shaver.widget.ManualApplyWidgetProvider"

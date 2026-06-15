@@ -1,6 +1,7 @@
 package com.u3coding.shaver.ui
 
 import android.Manifest
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -69,11 +70,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ruleEngine: RuleEngine
 
     private lateinit var tvWifiStatus: TextView
+    private lateinit var tvEnvScrollHint: TextView
     private lateinit var pbEnvExecLoading: ProgressBar
     private lateinit var tvEnvExecResult: TextView
     private lateinit var topBar: View
     private lateinit var composerBar: View
     private lateinit var rvChat: RecyclerView
+    private lateinit var rvEnvConfig: RecyclerView
     private lateinit var chatAdapter: ChatMessageAdapter
     private lateinit var envConfigAdapter: EnvConfigAdapter
     private var connectivityManager: ConnectivityManager? = null
@@ -92,10 +95,10 @@ class MainActivity : AppCompatActivity() {
     private var currentRuleSsid: String? = null
     private val changedConfigKeys = mutableSetOf<String>()
     private val envState = linkedMapOf(
-        "Wi-Fi" to "unknown",
-        KEY_CURRENT_BRIGHTNESS to "unknown",
-        KEY_CURRENT_VOLUME to "unknown",
-        KEY_CURRENT_BLUETOOTH to "unknown",
+        "\u65e0\u7ebf\u7f51" to "\u672a\u77e5",
+        KEY_CURRENT_BRIGHTNESS to "\u672a\u77e5",
+        KEY_CURRENT_VOLUME to "\u672a\u77e5",
+        KEY_CURRENT_BLUETOOTH to "\u672a\u77e5",
         KEY_DISCONNECT_BRIGHTNESS to "\u672a\u914d\u7f6e",
         KEY_DISCONNECT_VOLUME to "\u672a\u914d\u7f6e",
         KEY_DISCONNECT_BLUETOOTH to "\u672a\u914d\u7f6e"
@@ -121,8 +124,10 @@ class MainActivity : AppCompatActivity() {
         connectivityManager = getSystemService(ConnectivityManager::class.java)
         requestNotificationPermissionIfNeeded()
         ManualApplyWidgetProvider.refreshAll(this)
+        showOnboardingIfNeeded()
 
         tvWifiStatus = findViewById(R.id.tvWifiStatus)
+        tvEnvScrollHint = findViewById(R.id.tvEnvScrollHint)
         pbEnvExecLoading = findViewById(R.id.pbEnvExecLoading)
         tvEnvExecResult = findViewById(R.id.tvEnvExecResult)
         topBar = findViewById(R.id.topBar)
@@ -130,16 +135,25 @@ class MainActivity : AppCompatActivity() {
         val et = findViewById<EditText>(R.id.etInput)
         inputEditText = et
         val btn = findViewById<Button>(R.id.btnSend)
+        findViewById<Button>(R.id.btnOpenGuide).setOnClickListener {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+        }
+        findViewById<Button>(R.id.btnManageScenes).setOnClickListener {
+            startActivity(Intent(this, SceneListActivity::class.java))
+        }
 
         rvChat = findViewById(R.id.rvChat)
         rvChat.layoutManager = LinearLayoutManager(this)
         chatAdapter = ChatMessageAdapter()
         rvChat.adapter = chatAdapter
 
-        val rvEnvConfig = findViewById<RecyclerView>(R.id.rvEnvConfig)
+        rvEnvConfig = findViewById(R.id.rvEnvConfig)
         rvEnvConfig.layoutManager = LinearLayoutManager(this)
         envConfigAdapter = EnvConfigAdapter()
         rvEnvConfig.adapter = envConfigAdapter
+        rvEnvConfig.setOnScrollChangeListener { _, _, _, _, _ ->
+            updateEnvScrollHint()
+        }
 
         renderEnvConfigList()
 
@@ -202,6 +216,12 @@ class MainActivity : AppCompatActivity() {
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    private fun showOnboardingIfNeeded() {
+        if (OnboardingActivity.shouldShow(this)) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
         }
     }
     private fun setupInsets() {
@@ -307,7 +327,7 @@ class MainActivity : AppCompatActivity() {
     private fun runDisconnectedWifiScene() {
         val lastSsid = wifiSceneStateStore.getLastConnectedSsid()
         if (lastSsid.isNullOrBlank()) {
-            updateDisplayedWifiSsid("not connected")
+            updateDisplayedWifiSsid("\u672a\u8fde\u63a5")
             changedConfigKeys.clear()
             renderEnvConfigList()
             setExecutionFailed()
@@ -329,7 +349,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateDisplayedWifiSsid(ssid: String) {
-        envState["Wi-Fi"] = ssid
+        envState["\u65e0\u7ebf\u7f51"] = ssid
         tvWifiStatus.text = getString(R.string.current_wifi_format, ssid)
         renderEnvConfigList()
     }
@@ -387,11 +407,11 @@ class MainActivity : AppCompatActivity() {
                     changedConfigKeys.add(KEY_CURRENT_VOLUME)
                 }
                 "open_bluetooth" -> {
-                    envState[KEY_CURRENT_BLUETOOTH] = "On"
+                    envState[KEY_CURRENT_BLUETOOTH] = "\u5f00"
                     changedConfigKeys.add(KEY_CURRENT_BLUETOOTH)
                 }
                 "close_bluetooth" -> {
-                    envState[KEY_CURRENT_BLUETOOTH] = "Off"
+                    envState[KEY_CURRENT_BLUETOOTH] = "\u5173"
                     changedConfigKeys.add(KEY_CURRENT_BLUETOOTH)
                 }
             }
@@ -418,11 +438,11 @@ class MainActivity : AppCompatActivity() {
                 if (highlighted) changedConfigKeys.add(KEY_DISCONNECT_VOLUME)
             }
             "open_bluetooth" -> {
-                envState[KEY_DISCONNECT_BLUETOOTH] = "On"
+                envState[KEY_DISCONNECT_BLUETOOTH] = "\u5f00"
                 if (highlighted) changedConfigKeys.add(KEY_DISCONNECT_BLUETOOTH)
             }
             "close_bluetooth" -> {
-                envState[KEY_DISCONNECT_BLUETOOTH] = "Off"
+                envState[KEY_DISCONNECT_BLUETOOTH] = "\u5173"
                 if (highlighted) changedConfigKeys.add(KEY_DISCONNECT_BLUETOOTH)
             }
         }
@@ -436,6 +456,15 @@ class MainActivity : AppCompatActivity() {
             )
         }
         envConfigAdapter.submitList(list)
+        rvEnvConfig.post { updateEnvScrollHint() }
+    }
+
+    private fun updateEnvScrollHint() {
+        tvEnvScrollHint.visibility = if (rvEnvConfig.canScrollVertically(1)) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
     }
 
     private fun refreshChatList() {
@@ -452,11 +481,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setExecutionSuccess() {
-        showExecutionResult("OK", "#62F59A")
+        showExecutionResult("\u2713", "#62F59A")
     }
 
     private fun setExecutionFailed() {
-        showExecutionResult("X", "#FF5D5D")
+        showExecutionResult("\u00d7", "#FF5D5D")
     }
 
     private fun showExecutionResult(symbol: String, colorHex: String) {

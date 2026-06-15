@@ -21,20 +21,85 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Shaver AI"
-            android:textColor="@color/brand_topbar_text"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="&#x573A;&#x666F;&#x52A9;&#x624B;"
+                android:textColor="@color/brand_topbar_text"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnOpenGuide"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/bg_option_inactive"
+                android:paddingLeft="12dp"
+                android:paddingRight="12dp"
+                android:text="&#x4F7F;&#x7528;&#x6307;&#x5357;"
+                android:textAllCaps="false"
+                android:textColor="#EAF4FF"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnManageScenes"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:background="@drawable/bg_option_inactive"
+                android:paddingLeft="12dp"
+                android:paddingRight="12dp"
+                android:text="&#x573A;&#x666F;&#x7BA1;&#x7406;"
+                android:textAllCaps="false"
+                android:textColor="#EAF4FF"
+                android:textSize="12sp" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:text="Wi-Fi 场景自动化助手"
+            android:text="&#x65E0;&#x7EBF;&#x7F51;&#x573A;&#x666F;&#x81EA;&#x52A8;&#x5316;&#x52A9;&#x624B;"
             android:textColor="#BBD9F3"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/guideCard"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_panel"
+        android:orientation="vertical"
+        android:padding="12dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="&#x65B0;&#x624B;&#x5F15;&#x5BFC;&#xFF1A;&#x4F60;&#x53EF;&#x4EE5;&#x8FD9;&#x6837;&#x8BF4;"
+            android:textColor="#EAF4FF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:lineSpacingExtra="2dp"
+            android:text="&#x2022; &#x5148;&#x8BF4;&#xFF1A;&#x628A;&#x5F53;&#x524D;&#x65E0;&#x7EBF;&#x7F51;&#x53EB;&#x505A;&#x5BB6;&#x000A;&#x2022; &#x518D;&#x8BF4;&#xFF1A;&#x8FDB;&#x5165;&#x5BB6;&#x7684;&#x65F6;&#x5019;&#xFF0C;&#x4EAE;&#x5EA6;&#x8C03;&#x5230; 80%&#x000A;&#x2022; &#x6216;&#x8BF4;&#xFF1A;&#x79BB;&#x5F00;&#x516C;&#x53F8;&#x7684;&#x65F6;&#x5019;&#xFF0C;&#x97F3;&#x91CF;&#x8C03;&#x5230; 20%"
+            android:textColor="#AFCBE8"
             android:textSize="12sp" />
     </LinearLayout>
 
@@ -50,7 +115,7 @@
         android:padding="12dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/topBar">
+        app:layout_constraintTop_toBottomOf="@id/guideCard">
 
         <TextView
             android:id="@+id/tvWifiStatus"
@@ -96,13 +161,30 @@
                 android:visibility="gone" />
         </LinearLayout>
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rvEnvConfig"
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="132dp"
-            android:layout_marginTop="8dp"
-            android:overScrollMode="ifContentScrolls"
-            android:scrollbars="vertical" />
+            android:layout_marginTop="8dp">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvEnvConfig"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:overScrollMode="ifContentScrolls"
+                android:scrollbars="vertical" />
+
+            <TextView
+                android:id="@+id/tvEnvScrollHint"
+                android:layout_width="match_parent"
+                android:layout_height="30dp"
+                android:layout_gravity="bottom"
+                android:background="@drawable/bg_env_scroll_hint"
+                android:gravity="center"
+                android:text="&#x4E0B;&#x65B9;&#x8FD8;&#x6709;&#x66F4;&#x591A;&#x914D;&#x7F6E;&#xFF0C;&#x5411;&#x4E0A;&#x6ED1;&#x52A8;&#x67E5;&#x770B;"
+                android:textColor="#D9F4FF"
+                android:textSize="11sp"
+                android:visibility="gone" />
+        </FrameLayout>
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
