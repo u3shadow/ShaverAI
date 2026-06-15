@@ -12,6 +12,6 @@ public interface RuleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void upsert(RuleEntity entity);
 
-    @Query("SELECT * FROM rules WHERE trigger = :trigger ORDER BY operation")
-    List<RuleEntity> getByTrigger(String trigger);
+    @Query("SELECT * FROM rules WHERE trigger = :trigger AND event_type = :eventType ORDER BY operation")
+    List<RuleEntity> getByTriggerAndEvent(String trigger, String eventType);
 }

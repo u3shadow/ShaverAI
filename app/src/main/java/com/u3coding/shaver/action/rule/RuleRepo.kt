@@ -2,6 +2,8 @@ package com.u3coding.shaver.action.rule
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.u3coding.shaver.action.model.Action
 import com.u3coding.shaver.data.local.RuleDatabase
 import com.u3coding.shaver.data.local.RuleEntity
@@ -20,6 +22,7 @@ class RuleRepo {
                         RuleDatabase::class.java,
                         "rule_store.db"
                     )
+                        .addMigrations(MIGRATION_1_2)
                         .allowMainThreadQueries()
                         .build()
                 }
@@ -33,14 +36,18 @@ class RuleRepo {
                 RuleEntity(
                     action.trigger,
                     action.operation,
+                    RuleEventType.normalize(action.eventType),
                     value
                 )
             )
         }
 
-        fun getRules(ssid: String): List<Action> {
+        fun getRules(
+            ssid: String,
+            eventType: String = RuleEventType.WIFI_CONNECTED
+        ): List<Action> {
             val dao = requireDao()
-            return dao.getByTrigger(ssid).map { it.toAction() }
+            return dao.getByTriggerAndEvent(ssid, RuleEventType.normalize(eventType)).map { it.toAction() }
         }
 
         private fun requireDao() = checkNotNull(database) {
@@ -53,7 +60,8 @@ class RuleRepo {
             return Action(
                 trigger = trigger,
                 operation = operation,
-                params = params
+                params = params,
+                eventType = RuleEventType.normalize(eventType)
             )
         }
 
@@ -62,6 +70,19 @@ class RuleRepo {
             raw.toIntOrNull()?.let { return it }
             raw.toDoubleOrNull()?.let { return it }
             return raw
+        }
+
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE rules ADD COLUMN event_type TEXT NOT NULL DEFAULT '${RuleEventType.WIFI_CONNECTED}'"
+                )
+                database.execSQL("DROP INDEX IF EXISTS index_rules_trigger_operation")
+                database.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_rules_trigger_event_type_operation " +
+                        "ON rules(trigger, event_type, operation)"
+                )
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.u3coding.shaver.ui.chat
+﻿package com.u3coding.shaver.ui.chat
 
 import android.content.Context
 import android.util.Log
@@ -17,6 +17,7 @@ import com.u3coding.shaver.action.parser.InputType
 import com.u3coding.shaver.action.model.ModelDecision
 import com.u3coding.shaver.action.model.OperationList
 import com.u3coding.shaver.action.prompt.PromptBuilder
+import com.u3coding.shaver.action.rule.RuleEventType
 import com.u3coding.shaver.action.rule.RuleRepo
 import com.u3coding.shaver.action.rule.RuleRunResult
 import com.u3coding.shaver.action.parser.ToolCallParser
@@ -47,7 +48,7 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
         LocalIntentModelProvider(
             applicationContext,
             IntentFeatureExtractor(),
-            LocalModelBackend.GPU
+            LocalModelBackend.CPU
         )
     )
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -101,15 +102,15 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
             return false
         }
         if (requiresBluetoothPermission(message) && !hasBluetoothPermission) {
-            emitEvent(ChatUiEvent.RequestBluetoothPermission("蓝牙操作需要蓝牙连接权限"))
+            emitEvent(ChatUiEvent.RequestBluetoothPermission("\u84dd\u7259\u64cd\u4f5c\u9700\u8981\u84dd\u7259\u8fde\u63a5\u6743\u9650"))
             return false
         }
         if (!hasWriteSettingsPermission) {
-            emitEvent(ChatUiEvent.ShowToast("未授予修改系统设置权限，亮度设置可能仅在应用内生效"))
+            emitEvent(ChatUiEvent.ShowToast("\u672a\u6388\u4e88\u4fee\u6539\u7cfb\u7edf\u8bbe\u7f6e\u6743\u9650\uff0c\u4eae\u5ea6\u8bbe\u7f6e\u53ef\u80fd\u4ec5\u5728\u5e94\u7528\u5185\u751f\u6548"))
             return false
         }
         if (!hasWifiPermission) {
-            emitEvent(ChatUiEvent.ShowToast("未授予 Wi-Fi 读取权限"))
+            emitEvent(ChatUiEvent.ShowToast("\u672a\u6388\u4e88 Wi-Fi \u8bfb\u53d6\u6743\u9650"))
             return false
         }
         return true
@@ -182,8 +183,9 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
     }
     private suspend fun handleSystemEventTask(task: AgentTask.SystemEventTask) {
         val content = when (task.event) {
-            "wifi_changed" -> "检测到 Wi-Fi 变化：${task.wifiSsid ?: "未知 Wi-Fi"}"
-            else -> "收到系统事件：${task.event}"
+            "wifi_changed" -> "\u68c0\u6d4b\u5230 Wi-Fi \u53d8\u5316\uff1a${task.wifiSsid ?: "\u672a\u77e5 Wi-Fi"}"
+            "wifi_disconnected" -> "\u68c0\u6d4b\u5230 Wi-Fi \u65ad\u5f00\uff1a${task.wifiSsid ?: "\u672a\u77e5 Wi-Fi"}"
+            else -> "\u6536\u5230\u7cfb\u7edf\u4e8b\u4ef6\uff1a${task.event}"
         }
 
         val newMessage = UiMessage(
@@ -248,8 +250,9 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
             markLastAiCancelled()
             throw e
         } catch (e: Exception) {
-            markLastAiError("请求失败：${e.message ?: "unknown error"}")
-            emitEvent(ChatUiEvent.ShowSnackbar("请求失败：${e.message ?: "unknown error"}"))
+            val error = "\u8bf7\u6c42\u5931\u8d25\uff1a${e.message ?: "unknown error"}"
+            markLastAiError(error)
+            emitEvent(ChatUiEvent.ShowSnackbar(error))
         } finally {
             _uiState.update {
                 it.copy(
@@ -285,7 +288,7 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
                 )
             )
         } else {
-            //使用Input和wifiSsid构造一个临时的UiMessage，放在历史记录的最后面，来构造请求上下文
+            //浣跨敤Input鍜寃ifiSsid鏋勯€犱竴涓复鏃剁殑UiMessage锛屾斁鍦ㄥ巻鍙茶褰曠殑鏈€鍚庨潰锛屾潵鏋勯€犺姹備笂涓嬫枃
             normalContextManager.addMessage(
                 UiMessage(
                     id = System.currentTimeMillis().toString(),
@@ -306,12 +309,12 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
 
     private fun handleParsedActionResult(result: ActionDTO) {
         if (result.operation == null) {
-            // 没有解析出操作，直接返回
+            // 娌℃湁瑙ｆ瀽鍑烘搷浣滐紝鐩存帴杩斿洖
             return
         }
         val action = result.toAction()
         RuleRepo.addRule(action)
-        // 这里直接执行动作，实际应用中可能需要用户确认
+        // 杩欓噷鐩存帴鎵ц鍔ㄤ綔锛屽疄闄呭簲鐢ㄤ腑鍙兘闇€瑕佺敤鎴风‘璁?
         executor.execute(action)
         actionUpdateVersionCounter += 1
         _uiState.update { old ->
@@ -341,8 +344,12 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
                 }
 
                 val action = decision.toAction(wifiSsid)
-                executeAction(action)
-                val reply = "已执行：${action.operation}"
+                saveActionAndMaybeExecute(action)
+                val reply = if (RuleEventType.normalize(action.eventType) == RuleEventType.WIFI_DISCONNECTED) {
+                    "\u5df2\u4fdd\u5b58\u65ad\u5f00 Wi-Fi \u540e\u7684\u914d\u7f6e\uff1a${action.operation}"
+                } else {
+                    "\u5df2\u6267\u884c\uff1a${action.operation}"
+                }
                 replaceLastAiMessage(
                     text = reply,
                     status = MessageStatus.DONE
@@ -351,7 +358,7 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
             }
 
             is ModelDecision.Invalid -> {
-                val error = "解析结果不合法：${decision.reason}"
+                val error = "\u89e3\u6790\u7ed3\u679c\u4e0d\u5408\u6cd5\uff1a${decision.reason}"
                 markLastAiError(error)
                 emitEvent(ChatUiEvent.ShowSnackbar(error))
                 ""
@@ -361,12 +368,12 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
 
     private fun validateToolCall(decision: ModelDecision.ToolCall): String? {
         if (!OperationList.isValidOperation(decision.actionId)) {
-            return "不支持的操作：${decision.actionId}"
+            return "\u4e0d\u652f\u6301\u7684\u64cd\u4f5c\uff1a${decision.actionId}"
         }
         if (decision.actionId == "set_volume" || decision.actionId == "set_brightness") {
             val value = decision.params["value"]
             if (value !is Number) {
-                return "${decision.actionId} 缺少数值参数 value"
+                return "${decision.actionId} \u7f3a\u5c11\u6570\u503c\u53c2\u6570 value"
             }
         }
         return null
@@ -376,13 +383,16 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
         return Action(
             trigger = wifiSsid.orEmpty(),
             operation = actionId,
-            params = params
+            params = params,
+            eventType = RuleEventType.normalize(eventType)
         )
     }
 
-    private fun executeAction(action: Action) {
+    private fun saveActionAndMaybeExecute(action: Action) {
         RuleRepo.addRule(action)
-        executor.execute(action)
+        if (RuleEventType.normalize(action.eventType) == RuleEventType.WIFI_CONNECTED) {
+            executor.execute(action)
+        }
         actionUpdateVersionCounter += 1
         _uiState.update { old ->
             old.copy(
@@ -404,10 +414,10 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
 
     fun onRuleRunResult(result: RuleRunResult) {
         val content = when (result) {
-            is RuleRunResult.Success -> "执行成功"
-            is RuleRunResult.NoRule -> "未找到对应规则"
-            is RuleRunResult.SkippedDuplicate -> "已经执行过相同规则，跳过"
-            is RuleRunResult.Failed -> "执行失败，原因：${result.reason}"
+            is RuleRunResult.Success -> "\u6267\u884c\u6210\u529f"
+            is RuleRunResult.NoRule -> "\u672a\u627e\u5230\u5bf9\u5e94\u89c4\u5219"
+            is RuleRunResult.SkippedDuplicate -> "\u5df2\u7ecf\u6267\u884c\u8fc7\u76f8\u540c\u89c4\u5219\uff0c\u8df3\u8fc7"
+            is RuleRunResult.Failed -> "\u6267\u884c\u5931\u8d25\uff0c\u539f\u56e0\uff1a${result.reason}"
         }
         val newMessage = UiMessage(
             id = "rule-${System.currentTimeMillis()}",
@@ -584,8 +594,8 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
 
     companion object {
         private const val LOCAL_INTENT_CONFIDENCE_THRESHOLD = 0.7f
-        private const val OPEN_BLUETOOTH_CMD = "打开蓝牙"
-        private const val CLOSE_BLUETOOTH_CMD = "关闭蓝牙"
+        private const val OPEN_BLUETOOTH_CMD = "\u6253\u5f00\u84dd\u7259"
+        private const val CLOSE_BLUETOOTH_CMD = "\u5173\u95ed\u84dd\u7259"
     }
 
     private fun emitEvent(event: ChatUiEvent) {
@@ -609,3 +619,4 @@ sealed class ChatUiEvent {
     data class ShowSnackbar(val message: String) : ChatUiEvent()
     data class Navigate(val route: String) : ChatUiEvent()
 }
+

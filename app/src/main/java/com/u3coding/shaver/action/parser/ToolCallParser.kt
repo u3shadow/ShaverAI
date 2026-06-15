@@ -92,7 +92,11 @@ class ToolCallParser(
 
         return ModelDecision.ToolCall(
             actionId = actionId,
-            params = params
+            params = params,
+            eventType = jsonObject.stringOrNull("event_type")
+                ?: jsonObject.stringOrNull("event")
+                ?: jsonObject.stringOrNull("trigger_event")
+                ?: jsonObject.stringOrNull("when")
         )
     }
 

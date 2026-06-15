@@ -31,6 +31,7 @@ $input
 Return this JSON shape:
 {
   "trigger": "string or null",
+  "event_type": "wifi_connected | wifi_disconnected",
   "operation": "set_volume | set_brightness | open_bluetooth | close_bluetooth | null",
   "params": {
     "value": "number or null"
@@ -46,10 +47,12 @@ Rules:
 6. If the operation cannot be determined, use null.
 7. If the operation does not need a numeric value, params.value must be null.
 8. If the user asks for silent mode, use set_volume with value 0.
+9. Use event_type wifi_disconnected when the user says to apply settings after leaving, disconnecting from, or exiting a Wi-Fi. Otherwise use wifi_connected.
 
 Example:
 {
   "trigger": "OfficeWiFi",
+  "event_type": "wifi_connected",
   "operation": "set_volume",
   "params": {
     "value": 0
@@ -106,6 +109,7 @@ $input
 If the user wants to change phone settings, return tool_call:
 {
   "type": "tool_call",
+  "event_type": "wifi_connected",
   "action": "set_volume",
   "params": {
     "value": 3
@@ -124,17 +128,24 @@ Available actions:
 3. open_bluetooth: params must be an empty object {}.
 4. close_bluetooth: params must be an empty object {}.
 
+Available event_type values:
+1. wifi_connected: apply when the device connects to the current Wi-Fi.
+2. wifi_disconnected: apply when the device leaves/disconnects from the current Wi-Fi and has not connected to a new Wi-Fi.
+
 Decision rules:
 1. Use set_volume for volume changes or silent mode.
 2. Use set_brightness for brightness changes.
 3. Use open_bluetooth when the user asks to turn Bluetooth on.
 4. Use close_bluetooth when the user asks to turn Bluetooth off.
 5. If the user asks what you can do, return chat_reply and explain in Chinese that the app can configure volume, brightness, and Bluetooth for the current Wi-Fi, then automatically apply saved settings on next launch.
-6. If the intent is unclear, return chat_reply and ask a follow-up question.
+6. If the user mentions after leaving, after disconnecting from, exiting, or no longer connected to Wi-Fi, set event_type to wifi_disconnected.
+7. Otherwise set event_type to wifi_connected.
+8. If the intent is unclear, return chat_reply and ask a follow-up question.
 
 Examples:
 {
   "type": "tool_call",
+  "event_type": "wifi_connected",
   "action": "set_volume",
   "params": {
     "value": 3
@@ -153,6 +164,7 @@ Now return JSON for the current user input:
     fun buildAppCapabilityPrompt(): String {
         return """
 When the user asks what this app can do, answer in Chinese: \u76ee\u524d\u8f6f\u4ef6\u53ef\u4ee5\u901a\u8fc7\u4e0e AI \u804a\u5929\uff0c\u8bbe\u7f6e\u5f53\u524d Wi-Fi \u73af\u5883\u4e0b\u7684\u624b\u673a\u914d\u7f6e\uff0c\u4f8b\u5982\u97f3\u91cf\u3001\u4eae\u5ea6\u3001\u84dd\u7259\u5f00\u5173\uff1b\u5e76\u4e14\u5728\u4e0b\u6b21\u542f\u52a8\u65f6\uff0c\u4f1a\u81ea\u52a8\u5e94\u7528\u8fd9\u4e9b\u5df2\u4fdd\u5b58\u7684\u914d\u7f6e\u3002 For other questions, answer normally.
+Also mention that the app can configure settings for both connecting to a Wi-Fi and disconnecting from a Wi-Fi.
 """.trimIndent()
     }
 }

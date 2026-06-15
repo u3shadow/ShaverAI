@@ -5,7 +5,8 @@ sealed class ModelDecision {
 
     data class ToolCall(
         val actionId: String,
-        val params: Map<String, Any>
+        val params: Map<String, Any>,
+        val eventType: String? = null
     ) : ModelDecision()
 
     data class Invalid(
