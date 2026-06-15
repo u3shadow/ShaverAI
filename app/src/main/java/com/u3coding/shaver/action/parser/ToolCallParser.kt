@@ -96,7 +96,12 @@ class ToolCallParser(
             eventType = jsonObject.stringOrNull("event_type")
                 ?: jsonObject.stringOrNull("event")
                 ?: jsonObject.stringOrNull("trigger_event")
-                ?: jsonObject.stringOrNull("when")
+                ?: jsonObject.stringOrNull("when"),
+            target = jsonObject.stringOrNull("target")
+                ?: jsonObject.stringOrNull("trigger")
+                ?: jsonObject.stringOrNull("scene")
+                ?: jsonObject.stringOrNull("wifi")
+                ?: jsonObject.stringOrNull("ssid")
         )
     }
 

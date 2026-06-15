@@ -20,6 +20,7 @@ import com.u3coding.shaver.action.prompt.PromptBuilder
 import com.u3coding.shaver.action.rule.RuleEventType
 import com.u3coding.shaver.action.rule.RuleRepo
 import com.u3coding.shaver.action.rule.RuleRunResult
+import com.u3coding.shaver.action.rule.WifiAliasRepo
 import com.u3coding.shaver.action.parser.ToolCallParser
 import com.u3coding.shaver.model.CommandChatContextManager
 import com.u3coding.shaver.model.IntentFeatureExtractor
@@ -105,12 +106,12 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
             emitEvent(ChatUiEvent.RequestBluetoothPermission("\u84dd\u7259\u64cd\u4f5c\u9700\u8981\u84dd\u7259\u8fde\u63a5\u6743\u9650"))
             return false
         }
-        if (!hasWriteSettingsPermission) {
+        if (requiresWriteSettingsPermission(message) && !hasWriteSettingsPermission) {
             emitEvent(ChatUiEvent.ShowToast("\u672a\u6388\u4e88\u4fee\u6539\u7cfb\u7edf\u8bbe\u7f6e\u6743\u9650\uff0c\u4eae\u5ea6\u8bbe\u7f6e\u53ef\u80fd\u4ec5\u5728\u5e94\u7528\u5185\u751f\u6548"))
             return false
         }
         if (!hasWifiPermission) {
-            emitEvent(ChatUiEvent.ShowToast("\u672a\u6388\u4e88 Wi-Fi \u8bfb\u53d6\u6743\u9650"))
+            emitEvent(ChatUiEvent.ShowToast("\u672a\u6388\u4e88\u65e0\u7ebf\u7f51\u8bfb\u53d6\u6743\u9650"))
             return false
         }
         return true
@@ -119,6 +120,10 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
     fun requiresBluetoothPermission(input: String): Boolean {
         return input.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) ||
             input.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true)
+    }
+
+    private fun requiresWriteSettingsPermission(input: String): Boolean {
+        return input.contains(BRIGHTNESS_CMD, ignoreCase = true)
     }
 
     fun handleUserInput(input: String, wifiSsid: String?) {
@@ -130,6 +135,10 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
     }
 
     private fun resolveInputType(message: String): InputType {
+        if (isWifiAliasCommand(message)) {
+            return InputType.CommandChat
+        }
+
         val localResult = localModelRuntime.classifyIntent(message)
         Log.d(
             "LocalIntentDecision",
@@ -151,6 +160,18 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
         }
 
         return InputClassifier.classify(message)
+    }
+
+    private fun isWifiAliasCommand(message: String): Boolean {
+        return listOf(
+            "\u522b\u540d",
+            "\u53eb\u505a",
+            "\u53eb\u4f5c",
+            "\u547d\u540d",
+            "\u53d6\u540d"
+        ).any { keyword ->
+            message.contains(keyword, ignoreCase = true)
+        }
     }
 
     private fun submitInputTask(
@@ -183,8 +204,8 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
     }
     private suspend fun handleSystemEventTask(task: AgentTask.SystemEventTask) {
         val content = when (task.event) {
-            "wifi_changed" -> "\u68c0\u6d4b\u5230 Wi-Fi \u53d8\u5316\uff1a${task.wifiSsid ?: "\u672a\u77e5 Wi-Fi"}"
-            "wifi_disconnected" -> "\u68c0\u6d4b\u5230 Wi-Fi \u65ad\u5f00\uff1a${task.wifiSsid ?: "\u672a\u77e5 Wi-Fi"}"
+            "wifi_changed" -> "\u68c0\u6d4b\u5230\u65e0\u7ebf\u7f51\u53d8\u5316\uff1a${task.wifiSsid ?: "\u672a\u77e5\u65e0\u7ebf\u7f51"}"
+            "wifi_disconnected" -> "\u68c0\u6d4b\u5230\u65e0\u7ebf\u7f51\u65ad\u5f00\uff1a${task.wifiSsid ?: "\u672a\u77e5\u65e0\u7ebf\u7f51"}"
             else -> "\u6536\u5230\u7cfb\u7edf\u4e8b\u4ef6\uff1a${task.event}"
         }
 
@@ -250,7 +271,7 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
             markLastAiCancelled()
             throw e
         } catch (e: Exception) {
-            val error = "\u8bf7\u6c42\u5931\u8d25\uff1a${e.message ?: "unknown error"}"
+            val error = "\u8bf7\u6c42\u5931\u8d25\uff1a${e.message ?: "\u672a\u77e5\u9519\u8bef"}"
             markLastAiError(error)
             emitEvent(ChatUiEvent.ShowSnackbar(error))
         } finally {
@@ -343,12 +364,21 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
                     return ""
                 }
 
+                if (decision.actionId == SET_WIFI_ALIAS_ACTION) {
+                    val reply = saveWifiAlias(decision, wifiSsid)
+                    replaceLastAiMessage(
+                        text = reply,
+                        status = MessageStatus.DONE
+                    )
+                    return reply
+                }
+
                 val action = decision.toAction(wifiSsid)
                 saveActionAndMaybeExecute(action)
                 val reply = if (RuleEventType.normalize(action.eventType) == RuleEventType.WIFI_DISCONNECTED) {
-                    "\u5df2\u4fdd\u5b58\u65ad\u5f00 Wi-Fi \u540e\u7684\u914d\u7f6e\uff1a${action.operation}"
+                    "\u5df2\u4fdd\u5b58\u65ad\u5f00\u65e0\u7ebf\u7f51\u540e\u7684\u914d\u7f6e\uff1a${action.toDisplayName()}"
                 } else {
-                    "\u5df2\u6267\u884c\uff1a${action.operation}"
+                    "\u5df2\u6267\u884c\uff1a${action.toDisplayName()}"
                 }
                 replaceLastAiMessage(
                     text = reply,
@@ -370,6 +400,13 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
         if (!OperationList.isValidOperation(decision.actionId)) {
             return "\u4e0d\u652f\u6301\u7684\u64cd\u4f5c\uff1a${decision.actionId}"
         }
+        if (decision.actionId == SET_WIFI_ALIAS_ACTION) {
+            val alias = decision.params["alias"]?.toString()?.trim()
+            if (alias.isNullOrBlank()) {
+                return "\u522b\u540d\u4e0d\u80fd\u4e3a\u7a7a"
+            }
+            return null
+        }
         if (decision.actionId == "set_volume" || decision.actionId == "set_brightness") {
             val value = decision.params["value"]
             if (value !is Number) {
@@ -379,9 +416,43 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
         return null
     }
 
+    private fun saveWifiAlias(
+        decision: ModelDecision.ToolCall,
+        wifiSsid: String?
+    ): String {
+        val alias = decision.params["alias"]?.toString()?.trim().orEmpty()
+        val targetSsid = resolveAliasTargetSsid(decision.target, wifiSsid)
+        if (targetSsid.isBlank()) {
+            val message = "\u6211\u8fd8\u6ca1\u8bfb\u5230\u5f53\u524d\u65e0\u7ebf\u7f51\uff0c\u8bf7\u8fde\u4e0a\u65e0\u7ebf\u7f51\u540e\u518d\u5bf9\u6211\u8bf4\uff1a\u628a\u5f53\u524d\u65e0\u7ebf\u7f51\u53eb\u505a$alias"
+            emitEvent(ChatUiEvent.ShowSnackbar(message))
+            return message
+        }
+
+        WifiAliasRepo.saveAlias(targetSsid, alias)
+        return "\u5df2\u628a\u65e0\u7ebf\u7f51\u201c$targetSsid\u201d\u7684\u522b\u540d\u8bbe\u7f6e\u4e3a\u201c$alias\u201d\u3002\u4ee5\u540e\u4f60\u53ef\u4ee5\u76f4\u63a5\u8bf4\uff1a\u8fdb\u5165$alias\u65f6\u8c03\u6574\u4eae\u5ea6\uff0c\u6216\u79bb\u5f00$alias\u65f6\u8c03\u6574\u97f3\u91cf\u3002"
+    }
+
+    private fun resolveAliasTargetSsid(target: String?, wifiSsid: String?): String {
+        val cleanTarget = target?.trim().orEmpty()
+        val targetMeansCurrentWifi = cleanTarget.isBlank() ||
+            cleanTarget.equals("current Wi-Fi", ignoreCase = true) ||
+            cleanTarget.equals("current wifi", ignoreCase = true) ||
+            cleanTarget == "\u5f53\u524d Wi-Fi" ||
+            cleanTarget == "\u5f53\u524d wifi" ||
+            cleanTarget == "\u8fd9\u4e2a Wi-Fi" ||
+            cleanTarget == "\u8fd9\u4e2a wifi"
+
+        if (targetMeansCurrentWifi) {
+            return wifiSsid.orEmpty()
+        }
+
+        return WifiAliasRepo.resolveTargetToSsid(cleanTarget).orEmpty()
+    }
+
     private fun ModelDecision.ToolCall.toAction(wifiSsid: String?): Action {
+        val resolvedSsid = WifiAliasRepo.resolveTargetToSsid(target) ?: wifiSsid.orEmpty()
         return Action(
-            trigger = wifiSsid.orEmpty(),
+            trigger = resolvedSsid,
             operation = actionId,
             params = params,
             eventType = RuleEventType.normalize(eventType)
@@ -399,6 +470,16 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
                 lastSuccessfulActions = listOf(action),
                 actionUpdateVersion = actionUpdateVersionCounter
             )
+        }
+    }
+
+    private fun Action.toDisplayName(): String {
+        return when (operation) {
+            "set_volume" -> "\u97f3\u91cf"
+            "set_brightness" -> "\u4eae\u5ea6"
+            "open_bluetooth" -> "\u6253\u5f00\u84dd\u7259"
+            "close_bluetooth" -> "\u5173\u95ed\u84dd\u7259"
+            else -> operation
         }
     }
 
@@ -596,6 +677,8 @@ class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context
         private const val LOCAL_INTENT_CONFIDENCE_THRESHOLD = 0.7f
         private const val OPEN_BLUETOOTH_CMD = "\u6253\u5f00\u84dd\u7259"
         private const val CLOSE_BLUETOOTH_CMD = "\u5173\u95ed\u84dd\u7259"
+        private const val BRIGHTNESS_CMD = "\u4eae\u5ea6"
+        private const val SET_WIFI_ALIAS_ACTION = "set_wifi_alias"
     }
 
     private fun emitEvent(event: ChatUiEvent) {
