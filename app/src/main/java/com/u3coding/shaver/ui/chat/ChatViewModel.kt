@@ -1,705 +1,448 @@
-﻿package com.u3coding.shaver.ui.chat
+package com.u3coding.shaver.ui.chat
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.u3coding.shaver.data.remote.ApiProvider
-import com.u3coding.shaver.data.remote.ChatMessage
-import com.u3coding.shaver.data.repository.ChatRepo
-import com.u3coding.shaver.action.model.Action
-import com.u3coding.shaver.action.model.ActionDTO
 import com.u3coding.shaver.action.executor.ActionExecutor
-import com.u3coding.shaver.action.agent.AgentTask
-import com.u3coding.shaver.action.agent.AgentTaskScheduler
-import com.u3coding.shaver.action.parser.InputClassifier
-import com.u3coding.shaver.action.parser.InputType
-import com.u3coding.shaver.action.model.ModelDecision
-import com.u3coding.shaver.action.model.OperationList
-import com.u3coding.shaver.action.prompt.PromptBuilder
-import com.u3coding.shaver.action.rule.RuleEventType
-import com.u3coding.shaver.action.rule.RuleRepo
+import com.u3coding.shaver.action.executor.BackendActionMapper
+import com.u3coding.shaver.action.model.Action
+import com.u3coding.shaver.action.parser.BackendRuleDraftMapper
 import com.u3coding.shaver.action.rule.RuleRunResult
-import com.u3coding.shaver.action.rule.WifiAliasRepo
-import com.u3coding.shaver.action.parser.ToolCallParser
-import com.u3coding.shaver.model.CommandChatContextManager
-import com.u3coding.shaver.model.IntentFeatureExtractor
-import com.u3coding.shaver.model.LocalIntentModelProvider
+import com.u3coding.shaver.data.remote.AgentChatRequest
+import com.u3coding.shaver.data.remote.AgentChatResponse
+import com.u3coding.shaver.data.remote.BackendActionPlan
+import com.u3coding.shaver.data.remote.BackendApiProvider
+import com.u3coding.shaver.data.remote.DeviceCallbackRequest
+import com.u3coding.shaver.data.remote.DeviceContext
+import com.u3coding.shaver.data.remote.DeviceEventRequest
+import com.u3coding.shaver.data.remote.RuleCreateRequest
+import com.u3coding.shaver.data.repository.BackendRepository
+import com.u3coding.shaver.data.repository.BackendUserIdStore
 import com.u3coding.shaver.model.MessageStatus
-import com.u3coding.shaver.model.NormalChatContextManager
 import com.u3coding.shaver.model.Role
 import com.u3coding.shaver.model.UiMessage
-import com.u3coding.shaver.model.benchmark.LocalModelBenchmark
-import com.u3coding.shaver.model.runtime.IntentType
-import com.u3coding.shaver.model.runtime.LocalModelBackend
-import com.u3coding.shaver.model.runtime.LocalModelRuntime
-import com.u3coding.shaver.model.runtime.TfliteLocalModelRuntime
+import com.u3coding.shaver.ui.permission.DevicePermission
+import com.u3coding.shaver.ui.permission.DevicePermissionPolicy
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
 
-class ChatViewModel(val executor: ActionExecutor,val applicationContext: Context) : ViewModel() {
-    private val localModelRuntime: LocalModelRuntime = TfliteLocalModelRuntime(
-        LocalIntentModelProvider(
-            applicationContext,
-            IntentFeatureExtractor(),
-            LocalModelBackend.CPU
-        )
-    )
+class ChatViewModel(
+    private val executor: ActionExecutor,
+    context: Context
+) : ViewModel() {
+    private val appContext = context.applicationContext
+    private val backend = BackendRepository(BackendApiProvider.api)
+    private val userId = BackendUserIdStore(appContext).getOrCreate()
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
-    private val _events = MutableSharedFlow<ChatUiEvent>()
-    val events = _events.asSharedFlow()
-    private var currentJob: Job? = null
-    private var actionUpdateVersionCounter: Long = 0L
-    private var currentRoundWifiSsid: String? = null
-    private val normalContextManager = NormalChatContextManager()
-    private val commandContextManager = CommandChatContextManager()
-    private val repo = ChatRepo(ApiProvider.api)
-    private val scheduler = AgentTaskScheduler(
-        scope = viewModelScope,
-        onChatTask = { task ->
-            handleNormalChatInput(task.text, task.wifiSsid)
-        },
-        onCommandTask = { task ->
-            handleCommandInput(task.text, task.wifiSsid)
-        },
-        onSystemEventTask = { task ->
-            handleSystemEventTask(task)
-        }
-    )
-    private fun runLocalModelBenchmark() {
-        viewModelScope.launch {
-            val results = LocalModelBenchmark(applicationContext).runAll()
+    // Keep permission and confirmation events while Activity is briefly stopped.
+    private val _events = Channel<ChatUiEvent>(Channel.BUFFERED)
+    val events = _events.receiveAsFlow()
+    private var currentChatJob: Job? = null
+    private var pendingRule: RuleCreateRequest? = null
+    private var currentWifiSsid: String? = null
+    private var actionVersion = 0L
+    private var pendingExecution: PendingExecution? = null
+    private var pendingPermission: DevicePermission? = null
 
-            results.forEach { result ->
-                Log.d(
-                    "LocalModelBenchmark",
-                    "backend=${result.backend}, " +
-                            "success=${result.success}, " +
-                            "firstRun=${result.firstRunMs}ms, " +
-                            "avg=${result.avgRunMs}ms, " +
-                            "min=${result.minRunMs}ms, " +
-                            "max=${result.maxRunMs}ms, " +
-                            "error=${result.error}"
-                )
-            }
-        }
-    }
-    fun canSendMessage(
-        input: String,
-        hasBluetoothPermission: Boolean,
-        hasWriteSettingsPermission: Boolean,
-        hasWifiPermission: Boolean
-    ): Boolean {
-        val message = input.trim()
-        if (message.isBlank()) {
-            return false
-        }
-        if (requiresBluetoothPermission(message) && !hasBluetoothPermission) {
-            emitEvent(ChatUiEvent.RequestBluetoothPermission("\u84dd\u7259\u64cd\u4f5c\u9700\u8981\u84dd\u7259\u8fde\u63a5\u6743\u9650"))
-            return false
-        }
-        if (requiresWriteSettingsPermission(message) && !hasWriteSettingsPermission) {
-            emitEvent(ChatUiEvent.ShowToast("\u672a\u6388\u4e88\u4fee\u6539\u7cfb\u7edf\u8bbe\u7f6e\u6743\u9650\uff0c\u4eae\u5ea6\u8bbe\u7f6e\u53ef\u80fd\u4ec5\u5728\u5e94\u7528\u5185\u751f\u6548"))
-            return false
-        }
-        if (!hasWifiPermission) {
-            emitEvent(ChatUiEvent.ShowToast("\u672a\u6388\u4e88 Wi-Fi \u8bfb\u53d6\u6743\u9650"))
-            return false
-        }
-        return true
-    }
-
-    fun requiresBluetoothPermission(input: String): Boolean {
-        return input.contains(OPEN_BLUETOOTH_CMD, ignoreCase = true) ||
-            input.contains(CLOSE_BLUETOOTH_CMD, ignoreCase = true)
-    }
-
-    private fun requiresWriteSettingsPermission(input: String): Boolean {
-        return input.contains(BRIGHTNESS_CMD, ignoreCase = true)
-    }
+    fun canSendMessage(input: String): Boolean = input.isNotBlank()
 
     fun handleUserInput(input: String, wifiSsid: String?) {
         val message = input.trim()
-        if (message.isBlank()) return
-
-        val inputType = resolveInputType(message)
-        submitInputTask(inputType, message, wifiSsid)
-    }
-
-    private fun resolveInputType(message: String): InputType {
-        if (isWifiAliasCommand(message)) {
-            return InputType.CommandChat
+        if (message.isEmpty()) return
+        if (pendingExecution != null) {
+            viewModelScope.launch {
+                _events.send(ChatUiEvent.ShowSnackbar("请先完成或取消当前设备权限授权"))
+            }
+            return
         }
+        currentChatJob?.cancel()
+        pendingRule = null
+        currentWifiSsid = wifiSsid
+        appendMessage(Role.USER, message, MessageStatus.DONE)
+        _uiState.update { it.copy(isGenerating = true, canSend = false, showStopButton = true) }
 
-        val localResult = localModelRuntime.classifyIntent(message)
-        Log.d(
-            "LocalIntentDecision",
-            "input=$message, " +
-                    "intent=${localResult.intent}, " +
-                    "confidence=${localResult.confidence}, " +
-                    "source=${localResult.source}, " +
-                    "backend=${localResult.backend}, " +
-                    "latency=${localResult.latencyMs}ms, " +
-                    "decision=${if (localResult.confidence >= LOCAL_INTENT_CONFIDENCE_THRESHOLD) "use_local" else "fallback"}"
-        )
-        if (localResult.confidence >= LOCAL_INTENT_CONFIDENCE_THRESHOLD) {
-            return when (localResult.intent) {
-                IntentType.NORMAL_CHAT -> InputType.NormalChat
-                IntentType.DEVICE_CONTROL,
-                IntentType.RULE_CREATE -> InputType.CommandChat
-                else -> {InputClassifier.classify(message)}
+        currentChatJob = viewModelScope.launch {
+            val runningJob = currentCoroutineContext()[Job]
+            try {
+                val reply = backend.chat(
+                    AgentChatRequest(
+                        user_id = userId,
+                        message = message,
+                        device_context = DeviceContext(wifi = wifiSsid)
+                    )
+                )
+                val successful = handleChatResponse(reply.value, reply.requestId, wifiSsid)
+                if (successful != null) _events.send(ChatUiEvent.RequestFinished(successful))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                showError(error.message ?: "服务器请求失败")
+                _events.send(ChatUiEvent.RequestFinished(false))
+            } finally {
+                if (currentChatJob === runningJob) {
+                    _uiState.update {
+                        it.copy(isGenerating = false, canSend = true, showStopButton = false)
+                    }
+                }
             }
         }
-
-        return InputClassifier.classify(message)
     }
 
-    private fun isWifiAliasCommand(message: String): Boolean {
-        return listOf(
-            "\u522b\u540d",
-            "\u53eb\u505a",
-            "\u53eb\u4f5c",
-            "\u547d\u540d",
-            "\u53d6\u540d"
-        ).any { keyword ->
-            message.contains(keyword, ignoreCase = true)
-        }
-    }
-
-    private fun submitInputTask(
-        inputType: InputType,
-        message: String,
+    private suspend fun handleChatResponse(
+        response: AgentChatResponse,
+        requestId: String,
         wifiSsid: String?
-    ) {
-        val task = when (inputType) {
-            InputType.NormalChat -> AgentTask.ChatTask(
-                text = message,
-                wifiSsid = wifiSsid
-            )
-
-            InputType.CommandChat -> AgentTask.CommandTask(
-                text = message,
-                wifiSsid = wifiSsid
-            )
+    ): Boolean? {
+        when (response.type) {
+            "action_plan" -> {
+                val plan = response.action_plan
+                    ?: throw IllegalStateException("服务器未返回动作计划")
+                if (!plan.need_android_execute || plan.execution_target != "android" ||
+                    plan.requires_confirmation
+                ) {
+                    throw IllegalStateException("该计划不能由 Android 直接执行")
+                }
+                return executeOrRequestPermission(
+                    PendingExecution(plan, requestId, wifiSsid, PlanSource.CHAT, response.answer)
+                )
+            }
+            "confirmation_required" -> {
+                pendingRule = BackendRuleDraftMapper.fromResponse(response, userId)
+                appendMessage(Role.ASSISTANT, response.answer, MessageStatus.DONE)
+                if (pendingRule != null) {
+                    _events.send(ChatUiEvent.ConfirmRule(pendingRule!!.name))
+                } else {
+                    _events.send(ChatUiEvent.ShowSnackbar("此计划暂不支持在 Android 端确认"))
+                }
+                return true
+            }
+            "error" -> {
+                showError(response.answer.ifBlank { response.errors.joinToString("；") })
+                return false
+            }
+            else -> {
+                appendMessage(Role.ASSISTANT, response.answer, MessageStatus.DONE)
+                return true
+            }
         }
+    }
 
-        scheduler.submit(task)
+    fun confirmPendingRule() {
+        val draft = pendingRule ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isGenerating = true, canSend = false) }
+            try {
+                val created = backend.createRule(draft).value
+                pendingRule = null
+                appendMessage(Role.ASSISTANT, "规则已保存：${created.name} (${created.rule_id})", MessageStatus.DONE)
+                _events.send(ChatUiEvent.RequestFinished(true))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                showError(error.message ?: "规则保存失败")
+                _events.send(ChatUiEvent.RequestFinished(false))
+            } finally {
+                _uiState.update { it.copy(isGenerating = false, canSend = true) }
+            }
+        }
+    }
+
+    fun discardPendingRule() {
+        pendingRule = null
+        appendMessage(Role.ASSISTANT, "已取消保存规则", MessageStatus.DONE)
     }
 
     fun onSystemEvent(event: String, wifiSsid: String?) {
-        scheduler.submit(
-            AgentTask.SystemEventTask(
-                event = event,
-                wifiSsid = wifiSsid
-            )
+        currentWifiSsid = wifiSsid
+        appendMessage(
+            Role.SYSTEM,
+            if (event == "wifi_changed") "检测到 Wi-Fi：${wifiSsid ?: "未知"}"
+            else "检测到 Wi-Fi 断开：${wifiSsid ?: "未知"}",
+            MessageStatus.DONE
         )
-    }
-    private suspend fun handleSystemEventTask(task: AgentTask.SystemEventTask) {
-        val content = when (task.event) {
-            "wifi_changed" -> "\u68c0\u6d4b\u5230 Wi-Fi \u53d8\u5316\uff1a${task.wifiSsid ?: "\u672a\u77e5 Wi-Fi"}"
-            "wifi_disconnected" -> "\u68c0\u6d4b\u5230 Wi-Fi \u65ad\u5f00\uff1a${task.wifiSsid ?: "\u672a\u77e5 Wi-Fi"}"
-            else -> "\u6536\u5230\u7cfb\u7edf\u4e8b\u4ef6\uff1a${task.event}"
-        }
+        if (event != "wifi_changed" || wifiSsid.isNullOrBlank()) return
 
-        val newMessage = UiMessage(
-            id = "system-${System.currentTimeMillis()}",
-            role = Role.SYSTEM,
-            content = content,
-            wifiSsid = task.wifiSsid,
-            status = MessageStatus.DONE
-        )
-
-        _uiState.update { old ->
-            old.copy(messages = old.messages + newMessage)
-        }
-    }
-    private suspend fun handleNormalChatInput(input: String, wifiSsid: String?) {
-        val message = input.trim()
-        if (message.isBlank()) {
-            return
-        }
-        currentRoundWifiSsid = wifiSsid
-        addUserMessage(message, wifiSsid)
-        val history = getHistory(InputType.NormalChat, message, wifiSsid, emptyList())
-        runStreamRequest(InputType.NormalChat, history)
-    }
-
-    private suspend  fun handleCommandInput(input: String, wifiSsid: String?) {
-        val message = input.trim()
-        if (message.isBlank()) {
-            return
-        }
-        currentRoundWifiSsid = wifiSsid
-        addUserMessage(message, wifiSsid)
-        val history = getHistory(InputType.CommandChat, message, wifiSsid, emptyList())
-        runStreamRequest(InputType.CommandChat, history)
-    }
-
-    private suspend fun runStreamRequest(inputType: InputType, history: List<ChatMessage>) {
-        _uiState.update {
-            it.copy(
-                isGenerating = true,
-                canSend = false,
-                showStopButton = true
-            )
-        }
-        var currentText = ""
-        try {
-            repo.streamChat(history).collect { token ->
-                currentText += token
-                updateLastAiMessage(currentText)
-            }
-
-            if (inputType == InputType.CommandChat) {
-                val assistantText = handleModelDecision(currentText, currentRoundWifiSsid)
-                if (assistantText.isNotBlank()) {
-                    appendAssistantToContext(inputType, assistantText, currentRoundWifiSsid)
-                }
-            } else {
-                markLastAiDone()
-                appendAssistantToContext(inputType, currentText, currentRoundWifiSsid)
-            }
-        } catch (e: CancellationException) {
-            markLastAiCancelled()
-            throw e
-        } catch (e: Exception) {
-            val error = "\u8bf7\u6c42\u5931\u8d25\uff1a${e.message ?: "\u672a\u77e5\u9519\u8bef"}"
-            markLastAiError(error)
-            emitEvent(ChatUiEvent.ShowSnackbar(error))
-        } finally {
-            _uiState.update {
-                it.copy(
-                    isGenerating = false,
-                    canSend = true,
-                    showStopButton = false
-                )
-            }
-        }
-    }
-
-    private fun getHistory(
-        inputType: InputType,
-        input: String,
-        wifiSsid: String?,
-        history: List<ChatMessage>
-    ): List<ChatMessage> {
-        var history1 = history
-        if (inputType == InputType.CommandChat) {
-            commandContextManager.addMessage(
-                UiMessage(
-                    id = System.currentTimeMillis().toString(),
-                    role = Role.USER,
-                    content = input,
-                    wifiSsid = wifiSsid,
-                    status = MessageStatus.DONE
-                )
-            )
-            history1 = buildRequestMessages(
-                buildRequestUiMessages(
-                    commandContextManager.getLastMessages(),
-                    wifiSsid
-                )
-            )
-        } else {
-            //浣跨敤Input鍜寃ifiSsid鏋勯€犱竴涓复鏃剁殑UiMessage锛屾斁鍦ㄥ巻鍙茶褰曠殑鏈€鍚庨潰锛屾潵鏋勯€犺姹備笂涓嬫枃
-            normalContextManager.addMessage(
-                UiMessage(
-                    id = System.currentTimeMillis().toString(),
-                    role = Role.USER,
-                    content = input,
-                    wifiSsid = wifiSsid,
-                    status = MessageStatus.DONE
-                )
-            )
-            history1 = buildRequestMessages(
-                buildNormalChatRequestUiMessages(
-                    normalContextManager.getLastMessages()
-                )
-            )
-        }
-        return history1
-    }
-
-    private fun handleParsedActionResult(result: ActionDTO) {
-        if (result.operation == null) {
-            // 娌℃湁瑙ｆ瀽鍑烘搷浣滐紝鐩存帴杩斿洖
-            return
-        }
-        val action = result.toAction()
-        RuleRepo.addRule(action)
-        // 杩欓噷鐩存帴鎵ц鍔ㄤ綔锛屽疄闄呭簲鐢ㄤ腑鍙兘闇€瑕佺敤鎴风‘璁?
-        executor.execute(action)
-        actionUpdateVersionCounter += 1
-        _uiState.update { old ->
-            old.copy(
-                lastSuccessfulActions = listOf(action),
-                actionUpdateVersion = actionUpdateVersionCounter
-            )
-        }
-    }
-
-    private fun handleModelDecision(rawOutput: String, wifiSsid: String?): String {
-        return when (val decision = ToolCallParser().parse(rawOutput)) {
-            is ModelDecision.ChatReply -> {
-                replaceLastAiMessage(
-                    text = decision.content,
-                    status = MessageStatus.DONE
-                )
-                decision.content
-            }
-
-            is ModelDecision.ToolCall -> {
-                val error = validateToolCall(decision)
-                if (error != null) {
-                    markLastAiError(error)
-                    emitEvent(ChatUiEvent.ShowSnackbar(error))
-                    return ""
-                }
-
-                if (decision.actionId == SET_WIFI_ALIAS_ACTION) {
-                    val reply = saveWifiAlias(decision, wifiSsid)
-                    replaceLastAiMessage(
-                        text = reply,
-                        status = MessageStatus.DONE
+        viewModelScope.launch {
+            val reply = try {
+                backend.reportEvent(
+                    DeviceEventRequest(
+                        user_id = userId,
+                        params = mapOf("ssid" to wifiSsid)
                     )
-                    return reply
-                }
-
-                val action = decision.toAction(wifiSsid)
-                saveActionAndMaybeExecute(action)
-                val reply = if (RuleEventType.normalize(action.eventType) == RuleEventType.WIFI_DISCONNECTED) {
-                    "\u5df2\u4fdd\u5b58\u65ad\u5f00 Wi-Fi \u540e\u7684\u914d\u7f6e\uff1a${action.toDisplayName()}"
-                } else {
-                    "\u5df2\u6267\u884c\uff1a${action.toDisplayName()}"
-                }
-                replaceLastAiMessage(
-                    text = reply,
-                    status = MessageStatus.DONE
                 )
-                reply
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w(TAG, "Backend event request failed; using local rules", error)
+                _events.send(ChatUiEvent.ShowSnackbar("服务器不可用，尝试本地场景"))
+                _events.send(ChatUiEvent.UseLocalConnectedRule(wifiSsid))
+                return@launch
             }
 
-            is ModelDecision.Invalid -> {
-                val error = "\u89e3\u6790\u7ed3\u679c\u4e0d\u5408\u6cd5\uff1a${decision.reason}"
-                markLastAiError(error)
-                emitEvent(ChatUiEvent.ShowSnackbar(error))
-                ""
+            if (!reply.value.matched) {
+                _events.send(ChatUiEvent.UseLocalConnectedRule(wifiSsid))
+                return@launch
+            }
+
+            try {
+                val plan = reply.value.action_plan
+                    ?: throw IllegalStateException("规则已命中但服务器未返回动作计划")
+                if (!plan.need_android_execute || plan.execution_target != "android" ||
+                    plan.requires_confirmation
+                ) {
+                    throw IllegalStateException("规则动作不能由 Android 直接执行")
+                }
+                val successful = executeOrRequestPermission(
+                    PendingExecution(plan, reply.requestId, wifiSsid, PlanSource.DEVICE_EVENT)
+                )
+                if (successful != null) _events.send(ChatUiEvent.RequestFinished(successful))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e(TAG, "Matched backend rule could not be executed", error)
+                showError(error.message ?: "服务器规则执行失败")
+                _events.send(ChatUiEvent.RequestFinished(false))
             }
         }
     }
 
-    private fun validateToolCall(decision: ModelDecision.ToolCall): String? {
-        if (!OperationList.isValidOperation(decision.actionId)) {
-            return "\u4e0d\u652f\u6301\u7684\u64cd\u4f5c\uff1a${decision.actionId}"
+    private suspend fun executeOrRequestPermission(pending: PendingExecution): Boolean? {
+        require(pending.plan.actions.isNotEmpty()) { "服务器返回空动作计划" }
+        // Validate every action and every permission before changing any device state.
+        val actions = pending.plan.actions.map {
+            BackendActionMapper.toLocalAction(it, pending.wifiSsid)
         }
-        if (decision.actionId == SET_WIFI_ALIAS_ACTION) {
-            val alias = decision.params["alias"]?.toString()?.trim()
-            if (alias.isNullOrBlank()) {
-                return "\u522b\u540d\u4e0d\u80fd\u4e3a\u7a7a"
-            }
+        val missing = DevicePermissionPolicy.firstMissing(
+            actions = actions,
+            canWriteSettings = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+                Settings.System.canWrite(appContext),
+            canConnectBluetooth = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                ContextCompat.checkSelfPermission(
+                    appContext, Manifest.permission.BLUETOOTH_CONNECT
+                ) == PackageManager.PERMISSION_GRANTED
+        )
+        if (missing != null) {
+            pendingExecution = pending
+            pendingPermission = missing
+            _events.send(ChatUiEvent.RequestDevicePermission(missing))
             return null
         }
-        if (decision.actionId == "set_volume" || decision.actionId == "set_brightness") {
-            val value = decision.params["value"]
-            if (value !is Number) {
-                return "${decision.actionId} \u7f3a\u5c11\u6570\u503c\u53c2\u6570 value"
+
+        pendingExecution = null
+        pendingPermission = null
+        val errors = executePlan(pending.plan, pending.requestId, pending.wifiSsid)
+        if (pending.source == PlanSource.CHAT) {
+            appendMessage(
+                Role.ASSISTANT,
+                if (errors.isEmpty()) pending.answer else "部分动作执行失败：${errors.joinToString("；")}",
+                if (errors.isEmpty()) MessageStatus.DONE else MessageStatus.ERROR
+            )
+        } else if (errors.isNotEmpty()) {
+            showError(errors.joinToString("；"))
+        }
+        return errors.isEmpty()
+    }
+
+    fun onDevicePermissionResult(permission: DevicePermission, granted: Boolean) {
+        val pending = pendingExecution ?: return
+        if (permission != pendingPermission) return
+        viewModelScope.launch {
+            if (!granted) {
+                pendingExecution = null
+                pendingPermission = null
+                val reason = when (permission) {
+                    DevicePermission.WRITE_SETTINGS -> "未授予修改系统设置权限，设备计划未执行"
+                    DevicePermission.BLUETOOTH_CONNECT -> "未授予蓝牙连接权限，设备计划未执行"
+                }
+                showError(reason)
+                _events.send(ChatUiEvent.RequestFinished(false))
+                reportUnexecutedActions(pending, reason)
+                return@launch
+            }
+            try {
+                val successful = executeOrRequestPermission(pending)
+                if (successful != null) _events.send(ChatUiEvent.RequestFinished(successful))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                pendingExecution = null
+                pendingPermission = null
+                showError(error.message ?: "设备计划执行失败")
+                _events.send(ChatUiEvent.RequestFinished(false))
             }
         }
-        return null
     }
 
-    private fun saveWifiAlias(
-        decision: ModelDecision.ToolCall,
+    private suspend fun reportUnexecutedActions(pending: PendingExecution, reason: String) {
+        if (pending.requestId.isBlank()) return
+        pending.plan.actions.forEach { item ->
+            try {
+                backend.reportCallback(
+                    DeviceCallbackRequest(
+                        request_id = pending.requestId,
+                        action = item.action,
+                        status = "failed",
+                        error = reason
+                    )
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w(TAG, "Could not report denied plan ${pending.requestId}", error)
+            }
+        }
+    }
+
+    private suspend fun executePlan(
+        plan: BackendActionPlan,
+        requestId: String,
         wifiSsid: String?
-    ): String {
-        val alias = decision.params["alias"]?.toString()?.trim().orEmpty()
-        val targetSsid = resolveAliasTargetSsid(decision.target, wifiSsid)
-        if (targetSsid.isBlank()) {
-            val message = "\u6211\u8fd8\u6ca1\u8bfb\u5230\u5f53\u524d Wi-Fi\uff0c\u8bf7\u8fde\u4e0a Wi-Fi \u540e\u518d\u5bf9\u6211\u8bf4\uff1a\u628a\u5f53\u524d Wi-Fi \u53eb\u505a$alias"
-            emitEvent(ChatUiEvent.ShowSnackbar(message))
-            return message
+    ): List<String> {
+        require(plan.actions.isNotEmpty()) { "服务器返回空动作计划" }
+        // Validate the whole plan before touching device state.
+        val actions = plan.actions.map { BackendActionMapper.toLocalAction(it, wifiSsid) }
+        val successfulActions = mutableListOf<Action>()
+        val errors = mutableListOf<String>()
+
+        plan.actions.zip(actions).forEach { (item, action) ->
+            var failure: String? = null
+            try {
+                checkPermission(action)
+                val executed = withContext(Dispatchers.IO) { executor.execute(action) }
+                if (!executed) failure = "${item.action} 未能执行"
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                failure = "${item.action}：${error.message ?: "执行失败"}"
+            }
+
+            if (failure == null) successfulActions += action else errors += failure!!
+            if (requestId.isNotBlank()) {
+                try {
+                    backend.reportCallback(
+                        DeviceCallbackRequest(
+                            request_id = requestId,
+                            action = item.action,
+                            status = if (failure == null) "success" else "failed",
+                            result = if (failure == null) item.params else emptyMap(),
+                            error = failure
+                        )
+                    )
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Log.w(TAG, "Device callback failed for $requestId", error)
+                    _events.send(ChatUiEvent.ShowSnackbar("动作回调上报失败，可用 request_id=$requestId 排查"))
+                }
+            }
         }
 
-        WifiAliasRepo.saveAlias(targetSsid, alias)
-        return "\u5df2\u628a Wi-Fi\u201c$targetSsid\u201d\u7684\u522b\u540d\u8bbe\u7f6e\u4e3a\u201c$alias\u201d\u3002\u4ee5\u540e\u4f60\u53ef\u4ee5\u76f4\u63a5\u8bf4\uff1a\u8fdb\u5165$alias\u65f6\u8c03\u6574\u4eae\u5ea6\uff0c\u6216\u79bb\u5f00$alias\u65f6\u8c03\u6574\u97f3\u91cf\u3002"
+        if (successfulActions.isNotEmpty()) onActionsExecuted(successfulActions)
+        return errors
     }
 
-    private fun resolveAliasTargetSsid(target: String?, wifiSsid: String?): String {
-        val cleanTarget = target?.trim().orEmpty()
-        val targetMeansCurrentWifi = cleanTarget.isBlank() ||
-            cleanTarget.equals("current Wi-Fi", ignoreCase = true) ||
-            cleanTarget.equals("current wifi", ignoreCase = true) ||
-            cleanTarget == "\u5f53\u524d Wi-Fi" ||
-            cleanTarget == "\u5f53\u524d wifi" ||
-            cleanTarget == "\u8fd9\u4e2a Wi-Fi" ||
-            cleanTarget == "\u8fd9\u4e2a wifi"
-
-        if (targetMeansCurrentWifi) {
-            return wifiSsid.orEmpty()
+    private fun checkPermission(action: Action) {
+        if (action.operation == "set_brightness" &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            !Settings.System.canWrite(appContext)
+        ) {
+            throw SecurityException("未授予修改系统设置权限")
         }
-
-        return WifiAliasRepo.resolveTargetToSsid(cleanTarget).orEmpty()
-    }
-
-    private fun ModelDecision.ToolCall.toAction(wifiSsid: String?): Action {
-        val resolvedSsid = WifiAliasRepo.resolveTargetToSsid(target) ?: wifiSsid.orEmpty()
-        return Action(
-            trigger = resolvedSsid,
-            operation = actionId,
-            params = params,
-            eventType = RuleEventType.normalize(eventType)
-        )
-    }
-
-    private fun saveActionAndMaybeExecute(action: Action) {
-        RuleRepo.addRule(action)
-        if (RuleEventType.normalize(action.eventType) == RuleEventType.WIFI_CONNECTED) {
-            executor.execute(action)
-        }
-        actionUpdateVersionCounter += 1
-        _uiState.update { old ->
-            old.copy(
-                lastSuccessfulActions = listOf(action),
-                actionUpdateVersion = actionUpdateVersionCounter
-            )
-        }
-    }
-
-    private fun Action.toDisplayName(): String {
-        return when (operation) {
-            "set_volume" -> "\u97f3\u91cf"
-            "set_brightness" -> "\u4eae\u5ea6"
-            "open_bluetooth" -> "\u6253\u5f00\u84dd\u7259"
-            "close_bluetooth" -> "\u5173\u95ed\u84dd\u7259"
-            else -> operation
+        if ((action.operation == "open_bluetooth" || action.operation == "close_bluetooth") &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_CONNECT) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            throw SecurityException("未授予蓝牙连接权限")
         }
     }
 
     fun onActionsExecuted(actions: List<Action>) {
-        actionUpdateVersionCounter += 1
-        _uiState.update { old ->
-            old.copy(
-                lastSuccessfulActions = actions,
-                actionUpdateVersion = actionUpdateVersionCounter
-            )
+        actionVersion += 1
+        _uiState.update {
+            it.copy(lastSuccessfulActions = actions, actionUpdateVersion = actionVersion)
         }
     }
 
     fun onRuleRunResult(result: RuleRunResult) {
-        val content = when (result) {
-            is RuleRunResult.Success -> "\u6267\u884c\u6210\u529f"
-            is RuleRunResult.NoRule -> "\u672a\u627e\u5230\u5bf9\u5e94\u89c4\u5219"
-            is RuleRunResult.SkippedDuplicate -> "\u5df2\u7ecf\u6267\u884c\u8fc7\u76f8\u540c\u89c4\u5219\uff0c\u8df3\u8fc7"
-            is RuleRunResult.Failed -> "\u6267\u884c\u5931\u8d25\uff0c\u539f\u56e0\uff1a${result.reason}"
+        val text = when (result) {
+            is RuleRunResult.Success -> "本地场景执行成功"
+            is RuleRunResult.NoRule -> "没有匹配的场景规则"
+            is RuleRunResult.SkippedDuplicate -> "相同场景已执行，跳过"
+            is RuleRunResult.Failed -> "本地场景执行失败：${result.reason}"
         }
-        val newMessage = UiMessage(
-            id = "rule-${System.currentTimeMillis()}",
-            role = Role.SYSTEM,
-            content = content,
-            wifiSsid = currentRoundWifiSsid,
-            status = MessageStatus.DONE
-        )
-        _uiState.update { old ->
-            old.copy(messages = old.messages + newMessage)
-        }
-    }
-
-    private fun buildRequestUiMessages(uiMessages: List<UiMessage>, wifiSsid: String?): List<UiMessage> {
-        if (wifiSsid.isNullOrBlank()) {
-            return uiMessages
-        }
-        return PromptBuilder().buildToolCallingPrompt(uiMessages.last().content, wifiSsid, uiState.value.messages).let { systemPrompt ->
-            listOf(UiMessage(
-                id = "system-${System.currentTimeMillis()}",
-                role = Role.SYSTEM,
-                content = systemPrompt,
-                wifiSsid = wifiSsid,
-                status = MessageStatus.DONE
-            )) + uiMessages
-        }
-    }
-
-    private fun buildNormalChatRequestUiMessages(uiMessages: List<UiMessage>): List<UiMessage> {
-        val capabilityPrompt = PromptBuilder().buildAppCapabilityPrompt()
-        return listOf(
-            UiMessage(
-                id = "system-normal-${System.currentTimeMillis()}",
-                role = Role.SYSTEM,
-                content = capabilityPrompt,
-                wifiSsid = currentRoundWifiSsid,
-                status = MessageStatus.DONE
-            )
-        ) + uiMessages
+        appendMessage(Role.SYSTEM, text, MessageStatus.DONE)
     }
 
     fun stopGenerating() {
-        scheduler.stopCurrentChat()
-        _uiState.update {
-            it.copy(
-                isGenerating = false,
-                canSend = true,
-                showStopButton = false
-            )
-        }
+        currentChatJob?.cancel()
+        currentChatJob = null
+        _uiState.update { it.copy(isGenerating = false, canSend = true, showStopButton = false) }
     }
 
-    private fun addUserMessage(input: String, wifiSsid: String?) {
-        val newMessage = UiMessage(
-            id = System.currentTimeMillis().toString(),
-            role = Role.USER,
-            content = input,
-            wifiSsid = wifiSsid,
-            status = MessageStatus.DONE
-        )
-        _uiState.update { old ->
-            old.copy(messages = old.messages + newMessage)
-        }
-    }
-
-    private fun updateLastAiMessage(text: String) {
-        val list = uiState.value.messages.toMutableList()
-        if (list.lastOrNull()?.role == Role.ASSISTANT) {
-            val old = list.last()
-            list[list.lastIndex] = old.copy(content = text, status = MessageStatus.GENERATING)
-        } else {
-            list.add(
-                UiMessage(
-                    id = System.currentTimeMillis().toString(),
-                    role = Role.ASSISTANT,
-                    content = text,
-                    wifiSsid = currentRoundWifiSsid,
-                    status = MessageStatus.GENERATING
-                )
-            )
-        }
-        _uiState.update { old ->
-            old.copy(messages = list)
-        }
-    }
-
-    private fun markLastAiDone() {
-        val list = uiState.value.messages.toMutableList()
-        val index = list.indexOfLast { it.role == Role.ASSISTANT }
-        if (index >= 0) {
-            list[index] = list[index].copy(status = MessageStatus.DONE)
-            _uiState.update { old ->
-                old.copy(messages = list)
-            }
-        }
-    }
-
-    private fun markLastAiError(text: String) {
-        val list = uiState.value.messages.toMutableList()
-        val index = list.indexOfLast { it.role == Role.ASSISTANT }
-        if (index >= 0) {
-            list[index] = list[index].copy(content = text, status = MessageStatus.ERROR)
-        } else {
-            list.add(
-                UiMessage(
-                    id = System.currentTimeMillis().toString(),
-                    role = Role.ASSISTANT,
-                    content = text,
-                    wifiSsid = currentRoundWifiSsid,
-                    status = MessageStatus.ERROR
-                )
-            )
-        }
-        _uiState.update { old ->
-            old.copy(messages = list)
-        }
-    }
-
-    private fun replaceLastAiMessage(text: String, status: MessageStatus) {
-        val list = uiState.value.messages.toMutableList()
-        val index = list.indexOfLast { it.role == Role.ASSISTANT }
-        if (index >= 0) {
-            list[index] = list[index].copy(
-                content = text,
-                status = status
-            )
-            _uiState.update { old ->
-                old.copy(messages = list)
-            }
-        }
-    }
-
-    private fun markLastAiCancelled() {
-        val list = uiState.value.messages.toMutableList()
-        val index = list.indexOfLast { it.role == Role.ASSISTANT && it.status == MessageStatus.GENERATING }
-        if (index >= 0) {
-            list[index] = list[index].copy(status = MessageStatus.CANCELLED)
-            _uiState.update { old ->
-                old.copy(messages = list)
-            }
-        }
-    }
-
-    private fun buildRequestMessages(uiMessages: List<UiMessage>): List<ChatMessage> {
-        return uiMessages.map {
-            ChatMessage(
-                role = when (it.role) {
-                    Role.USER -> "user"
-                    Role.ASSISTANT -> "assistant"
-                    Role.SYSTEM -> "system"
-                },
-                content = it.content
-            )
-        }
-    }
-
-    private fun appendAssistantToContext(
-        inputType: InputType,
-        text: String,
-        wifiSsid: String?
-    ) {
-        val msg = UiMessage(
-            id = System.currentTimeMillis().toString(),
-            role = Role.ASSISTANT,
+    private fun appendMessage(role: Role, text: String, status: MessageStatus) {
+        val message = UiMessage(
+            id = "${System.currentTimeMillis()}-${System.nanoTime()}",
+            role = role,
             content = text,
-            wifiSsid = wifiSsid,
-            status = MessageStatus.DONE
+            wifiSsid = currentWifiSsid,
+            status = status
         )
-        when (inputType) {
-            InputType.NormalChat -> normalContextManager.addMessage(msg)
-            InputType.CommandChat -> commandContextManager.addMessage(msg)
-        }
+        _uiState.update { it.copy(messages = it.messages + message) }
+    }
+
+    private suspend fun showError(message: String) {
+        appendMessage(Role.ASSISTANT, message, MessageStatus.ERROR)
+        _events.send(ChatUiEvent.ShowSnackbar(message))
     }
 
     companion object {
-        private const val LOCAL_INTENT_CONFIDENCE_THRESHOLD = 0.7f
-        private const val OPEN_BLUETOOTH_CMD = "\u6253\u5f00\u84dd\u7259"
-        private const val CLOSE_BLUETOOTH_CMD = "\u5173\u95ed\u84dd\u7259"
-        private const val BRIGHTNESS_CMD = "\u4eae\u5ea6"
-        private const val SET_WIFI_ALIAS_ACTION = "set_wifi_alias"
-    }
-
-    private fun emitEvent(event: ChatUiEvent) {
-        viewModelScope.launch {
-            _events.emit(event)
-        }
+        private const val TAG = "ChatViewModel"
     }
 }
+
+private enum class PlanSource { CHAT, DEVICE_EVENT }
+
+private data class PendingExecution(
+    val plan: BackendActionPlan,
+    val requestId: String,
+    val wifiSsid: String?,
+    val source: PlanSource,
+    val answer: String = ""
+)
+
 data class ChatUiState(
     val messages: List<UiMessage> = emptyList(),
     val isGenerating: Boolean = false,
     val canSend: Boolean = true,
     val showStopButton: Boolean = false,
-    val inputMode: InputType = InputType.NormalChat,
     val lastSuccessfulActions: List<Action> = emptyList(),
     val actionUpdateVersion: Long = 0L
 )
+
 sealed class ChatUiEvent {
     data class ShowToast(val message: String) : ChatUiEvent()
-    data class RequestBluetoothPermission(val reason: String) : ChatUiEvent()
+    data class RequestDevicePermission(val permission: DevicePermission) : ChatUiEvent()
     data class ShowSnackbar(val message: String) : ChatUiEvent()
+    data class ConfirmRule(val name: String) : ChatUiEvent()
+    data class UseLocalConnectedRule(val ssid: String) : ChatUiEvent()
+    data class RequestFinished(val success: Boolean) : ChatUiEvent()
     data class Navigate(val route: String) : ChatUiEvent()
 }
-

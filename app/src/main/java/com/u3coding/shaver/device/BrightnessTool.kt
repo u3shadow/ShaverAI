@@ -8,9 +8,9 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 class BrightnessTool(val context: Context) {
-    fun applyBrightness(level: Int) {
+    fun applyBrightness(level: Int): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.System.canWrite(context)) {
-            return
+            return false
         }
 
         val clamped = level.coerceIn(0, 100)
@@ -25,15 +25,16 @@ class BrightnessTool(val context: Context) {
         }
         val brightness = (mapped * 255f).roundToInt().coerceIn(0, 255)
 
-        Settings.System.putInt(
+        val updated = Settings.System.putInt(
             context.contentResolver,
             Settings.System.SCREEN_BRIGHTNESS,
             brightness
         )
 
-        Log.e(
+        Log.i(
             "BrightnessTool",
             "set brightness to $clamped, manufacturer=$manufacturer, actual brightness=$brightness"
         )
+        return updated
     }
 }

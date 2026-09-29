@@ -4,11 +4,13 @@ import android.bluetooth.BluetoothAdapter
 
 class ChangeBlueTooth {
 
-    fun open() {
-        BluetoothAdapter.getDefaultAdapter()?.enable()
+    fun open(): Boolean {
+        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return false
+        return adapter.isEnabled || adapter.enable()
     }
 
-    fun close() {
-        BluetoothAdapter.getDefaultAdapter()?.disable()
+    fun close(): Boolean {
+        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return false
+        return !adapter.isEnabled || adapter.disable()
     }
 }

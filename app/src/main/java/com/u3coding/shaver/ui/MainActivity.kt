@@ -1,7 +1,9 @@
 package com.u3coding.shaver.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -20,7 +22,9 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 import androidx.core.widget.addTextChangedListener
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -51,6 +55,7 @@ import com.u3coding.shaver.ui.chat.ChatViewModel
 import com.u3coding.shaver.ui.chat.ChatViewModelFactory
 import com.u3coding.shaver.ui.model.EnvConfigItem
 import com.u3coding.shaver.ui.permission.PermissionRequestHelper
+import com.u3coding.shaver.ui.permission.DevicePermission
 import com.u3coding.shaver.model.Role
 import kotlinx.coroutines.launch
 import kotlin.math.max
@@ -60,6 +65,14 @@ class MainActivity : AppCompatActivity() {
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
+    private val writeSettingsPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        viewModel.onDevicePermissionResult(
+            DevicePermission.WRITE_SETTINGS,
+            permissionHelper.hasWriteSettingsPermission()
+        )
+    }
 
     private lateinit var executor: ActionExecutor
     private lateinit var viewModel: ChatViewModel
@@ -93,6 +106,8 @@ class MainActivity : AppCompatActivity() {
     private var input: String = ""
     private var lastHandledActionVersion: Long = -1L
     private var currentRuleSsid: String? = null
+    private var lastReportedWifiSsid: String? = null
+    private var wifiPermissionRequested = false
     private val changedConfigKeys = mutableSetOf<String>()
     private val envState = linkedMapOf(
         "Wi-Fi" to "\u672a\u77e5",
@@ -181,8 +196,8 @@ class MainActivity : AppCompatActivity() {
                 launch {
                     viewModel.events.collect { event ->
                         when (event) {
-                            is ChatUiEvent.RequestBluetoothPermission -> {
-                                permissionHelper.requestBluetoothConnectPermission()
+                            is ChatUiEvent.RequestDevicePermission -> {
+                                requestDevicePermission(event.permission)
                             }
                             is ChatUiEvent.ShowToast -> {
                                 Toast.makeText(this@MainActivity, event.message, Toast.LENGTH_SHORT).show()
@@ -190,6 +205,23 @@ class MainActivity : AppCompatActivity() {
                             is ChatUiEvent.ShowSnackbar -> {
                                 val root = findViewById<View>(R.id.rootContainer)
                                 Snackbar.make(root, event.message, Snackbar.LENGTH_SHORT).show()
+                            }
+                            is ChatUiEvent.ConfirmRule -> {
+                                AlertDialog.Builder(this@MainActivity)
+                                    .setTitle("确认保存规则")
+                                    .setMessage("是否保存规则“${event.name}”？")
+                                    .setPositiveButton("保存") { _, _ -> viewModel.confirmPendingRule() }
+                                    .setNegativeButton("取消") { _, _ -> viewModel.discardPendingRule() }
+                                    .show()
+                            }
+                            is ChatUiEvent.UseLocalConnectedRule -> {
+                                val result = ruleEngine.run(event.ssid, RuleEventType.WIFI_CONNECTED)
+                                updateEnvFromRuleResult(result)
+                                renderEnvConfigList()
+                                viewModel.onRuleRunResult(result)
+                            }
+                            is ChatUiEvent.RequestFinished -> {
+                                if (event.success) setExecutionSuccess() else setExecutionFailed()
                             }
                             is ChatUiEvent.Navigate -> {
                                 // reserved for future navigation events
@@ -214,8 +246,48 @@ class MainActivity : AppCompatActivity() {
 
 
     private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    private fun requestDevicePermission(permission: DevicePermission) {
+        when (permission) {
+            DevicePermission.WRITE_SETTINGS -> {
+                if (permissionHelper.hasWriteSettingsPermission()) {
+                    viewModel.onDevicePermissionResult(permission, true)
+                    return
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("允许修改系统设置")
+                    .setMessage("调整屏幕亮度需要此特殊权限。打开系统设置并允许 ShaverAI 修改系统设置，返回后会继续执行当前计划。")
+                    .setPositiveButton("打开设置") { _, _ ->
+                        try {
+                            writeSettingsPermissionLauncher.launch(
+                                permissionHelper.writeSettingsPermissionIntent()
+                            )
+                        } catch (_: ActivityNotFoundException) {
+                            viewModel.onDevicePermissionResult(permission, false)
+                        }
+                    }
+                    .setNegativeButton("取消") { _, _ ->
+                        viewModel.onDevicePermissionResult(permission, false)
+                    }
+                    .setOnCancelListener {
+                        viewModel.onDevicePermissionResult(permission, false)
+                    }
+                    .show()
+            }
+            DevicePermission.BLUETOOTH_CONNECT -> {
+                if (permissionHelper.hasBluetoothConnectPermission()) {
+                    viewModel.onDevicePermissionResult(permission, true)
+                } else {
+                    permissionHelper.requestBluetoothConnectPermission()
+                }
+            }
         }
     }
 
@@ -249,7 +321,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        onWifiMaybeChanged()
+        if (permissionHelper.hasWifiPermission()) {
+            onWifiMaybeChanged()
+        } else if (!wifiPermissionRequested) {
+            wifiPermissionRequested = true
+            permissionHelper.requestWifiPermission()
+        }
     }
 
     override fun onStart() {
@@ -269,21 +346,17 @@ class MainActivity : AppCompatActivity() {
             return
         }
         setExecutionRunning()
-        val canSend = viewModel.canSendMessage(
-            input = message,
-            hasBluetoothPermission = permissionHelper.hasBluetoothConnectPermission(),
-            hasWriteSettingsPermission = permissionHelper.hasWriteSettingsPermission(),
-            hasWifiPermission = permissionHelper.hasWifiPermission()
-        )
+        val canSend = viewModel.canSendMessage(message)
         if (!canSend) {
-            if (!permissionHelper.hasWifiPermission()) {
-                permissionHelper.requestWifiPermission()
-            }
             setExecutionFailed()
             return
         }
 
-        val ssid = wifiProvider.getCurrentWifiSsid()
+        val ssid = if (permissionHelper.hasWifiPermission()) {
+            wifiProvider.getCurrentWifiSsid()
+        } else {
+            null
+        }
         viewModel.handleUserInput(message, ssid)
         inputEditText.text?.clear()
         input = ""
@@ -293,8 +366,6 @@ class MainActivity : AppCompatActivity() {
         if (!permissionHelper.hasWifiPermission()) {
             return
         }
-
-        setExecutionRunning()
 
         val ssid = wifiProvider.getCurrentWifiSsid()
         if (ssid.isNullOrBlank()) {
@@ -308,15 +379,14 @@ class MainActivity : AppCompatActivity() {
         updateDisplayedWifiSsid(ssid)
         loadDisconnectPlanForSsid(ssid)
 
-        viewModel.onSystemEvent(
-            event = "wifi_changed",
-            wifiSsid = ssid
-        )
-        val result = ruleEngine.run(ssid, RuleEventType.WIFI_CONNECTED)
-
-        updateEnvFromRuleResult(result)
-        renderEnvConfigList()
-        viewModel.onRuleRunResult(result)
+        if (lastReportedWifiSsid != ssid) {
+            lastReportedWifiSsid = ssid
+            setExecutionRunning()
+            viewModel.onSystemEvent(
+                event = "wifi_changed",
+                wifiSsid = ssid
+            )
+        }
     }
 
     private fun scheduleDisconnectedWifiCheck() {
@@ -325,6 +395,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runDisconnectedWifiScene() {
+        lastReportedWifiSsid = null
         val lastSsid = wifiSceneStateStore.getLastConnectedSsid()
         if (lastSsid.isNullOrBlank()) {
             updateDisplayedWifiSsid("\u672a\u8fde\u63a5")
@@ -386,6 +457,11 @@ class MainActivity : AppCompatActivity() {
                 changedConfigKeys.clear()
                 setExecutionFailed()
                 notifyManualApplyResult(false)
+                Snackbar.make(
+                    findViewById(R.id.rootContainer),
+                    result.reason,
+                    Snackbar.LENGTH_LONG
+                ).show()
             }
         }
     }
@@ -554,7 +630,12 @@ class MainActivity : AppCompatActivity() {
         permissionHelper.handlePermissionsResult(
             requestCode = requestCode,
             grantResults = grantResults,
-            onBluetoothGranted = { trySendMessage() },
+            onBluetoothGranted = {
+                viewModel.onDevicePermissionResult(DevicePermission.BLUETOOTH_CONNECT, true)
+            },
+            onBluetoothDenied = {
+                viewModel.onDevicePermissionResult(DevicePermission.BLUETOOTH_CONNECT, false)
+            },
             onWifiGranted = {
                 onWifiMaybeChanged()
                 trySendMessage()

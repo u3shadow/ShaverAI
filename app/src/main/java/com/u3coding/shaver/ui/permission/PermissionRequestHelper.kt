@@ -51,6 +51,7 @@ class PermissionRequestHelper(private val activity: AppCompatActivity) {
         requestCode: Int,
         grantResults: IntArray,
         onBluetoothGranted: () -> Unit,
+        onBluetoothDenied: () -> Unit,
         onWifiGranted: () -> Unit,
         onWifiDenied: () -> Unit
     ): Boolean {
@@ -59,6 +60,8 @@ class PermissionRequestHelper(private val activity: AppCompatActivity) {
                 grantResults[0] == PackageManager.PERMISSION_GRANTED
             if (granted) {
                 onBluetoothGranted()
+            } else {
+                onBluetoothDenied()
             }
             return true
         }
@@ -89,21 +92,13 @@ class PermissionRequestHelper(private val activity: AppCompatActivity) {
     }
 
     fun hasWriteSettingsPermission(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return true
-        }
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.System.canWrite(activity)
+    }
 
-        if (Settings.System.canWrite(activity)) {
-            return true
-        }
-
-        val intent = Intent(
+    fun writeSettingsPermissionIntent(): Intent = Intent(
             Settings.ACTION_MANAGE_WRITE_SETTINGS,
             Uri.parse("package:${activity.packageName}")
         )
-        activity.startActivity(intent)
-        return false
-    }
 
     companion object {
         const val REQUEST_BLUETOOTH_CONNECT_PERMISSION = 1002

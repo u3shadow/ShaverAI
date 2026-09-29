@@ -24,17 +24,23 @@ class RuleEngine(val context: Context) {
                 a.params == b.params &&
                 RuleEventType.normalize(a.eventType) == RuleEventType.normalize(b.eventType)
         }
-        lastActions = actions
         if (sceneKey == lastSceneKey&&sameAction) {
             return RuleRunResult.SkippedDuplicate
         }else{
-            lastSceneKey = sceneKey
             if (actions.size == 0){
                 return RuleRunResult.NoRule
             }else {
-                actions.forEach {
-                    executor.execute(it)
+                try {
+                    actions.forEach {
+                        if (!executor.execute(it)) {
+                            return RuleRunResult.Failed("${it.operation} 未能执行，请检查相关设备权限")
+                        }
+                    }
+                } catch (error: Exception) {
+                    return RuleRunResult.Failed(error.message ?: "设备动作执行失败")
                 }
+                lastSceneKey = sceneKey
+                lastActions = actions
                 return RuleRunResult.Success(actions)
             }
         }

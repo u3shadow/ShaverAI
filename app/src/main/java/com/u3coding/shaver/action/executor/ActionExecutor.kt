@@ -12,12 +12,18 @@ class ActionExecutor(
 ) {
     private val appContext = context.applicationContext
 
-    fun execute(action: Action) {
-        when (action.operation) {
-            "set_volume" -> setVolume(action)
-            "set_brightness" -> setBrightness(action)
+    fun execute(action: Action): Boolean {
+        return when (action.operation) {
+            "set_volume" -> {
+                setVolume(action)
+                true
+            }
+            "set_brightness" -> {
+                setBrightness(action)
+            }
             "open_bluetooth" -> openBluetooth()
             "close_bluetooth" -> closeBluetooth()
+            else -> false
         }
     }
 
@@ -26,15 +32,15 @@ class ActionExecutor(
         volumeTool.setVolume(Float(action.params["value"].toString()).toInt())
     }
 
-    private fun openBluetooth() {
-        ChangeBlueTooth().open()
+    private fun openBluetooth(): Boolean {
+        return ChangeBlueTooth().open()
     }
-    private fun closeBluetooth() {
-        ChangeBlueTooth().close()
+    private fun closeBluetooth(): Boolean {
+        return ChangeBlueTooth().close()
     }
 
-    private fun setBrightness(action: Action) {
+    private fun setBrightness(action: Action): Boolean {
         val brightnessTool = BrightnessTool(appContext)
-        brightnessTool.applyBrightness(Float(action.params["value"].toString()).toInt() )
+        return brightnessTool.applyBrightness(Float(action.params["value"].toString()).toInt())
     }
 }

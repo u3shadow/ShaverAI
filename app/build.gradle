@@ -7,11 +7,14 @@ def localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localProperties.load(new FileInputStream(localPropertiesFile))
 }
-def deepseekApiKey = (
-    localProperties.getProperty("DEEPSEEK_API_KEY")
-        ?: project.findProperty("DEEPSEEK_API_KEY")
-        ?: ""
-).toString().replace("\"", "\\\"")
+def backendBaseUrl = (
+    localProperties.getProperty("BACKEND_BASE_URL")
+        ?: project.findProperty("BACKEND_BASE_URL")
+        ?: "http://10.0.2.2:8000/"
+).toString().trim()
+if (!backendBaseUrl.endsWith("/")) {
+    backendBaseUrl += "/"
+}
 
 android {
     namespace 'com.u3coding.shaver'
@@ -27,7 +30,7 @@ android {
         targetSdk 36
         versionCode 1
         versionName "1.0"
-        buildConfigField "String", "DEEPSEEK_API_KEY", "\"${deepseekApiKey}\""
+        buildConfigField "String", "BACKEND_BASE_URL", groovy.json.JsonOutput.toJson(backendBaseUrl)
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

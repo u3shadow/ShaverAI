@@ -53,13 +53,12 @@ class ManualApplyProxyActivity : Activity() {
                 } else {
                     val originalActions = RuleRepo.getRules(scene.ssid, scene.eventType)
                     val executableActions = originalActions.filterNot { it.isBluetoothAction() }
-                    val applied = originalActions.isNotEmpty()
-                    if (applied) {
+                    val applied = if (executableActions.isNotEmpty()) {
                         val executor = ActionExecutor(appContext)
-                        executableActions.forEach { action ->
-                            executor.execute(action)
-                        }
-                    }
+                        runCatching {
+                            executableActions.all { action -> executor.execute(action) }
+                        }.getOrDefault(false)
+                    } else false
                     ManualApplyNotification.showResult(
                         context = appContext,
                         applied = applied,
